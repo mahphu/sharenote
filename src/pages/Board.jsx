@@ -679,20 +679,19 @@ function RealtimeSync({ store, boardId, userId, enabled }) {
   return null
 }
 
-// Live cursors component — uses useEditor() hook (child of <Tldraw>)
+// Live cursors component — Figma-style using PAGE coordinates
+// Sender: tracks cursor in canvas/page space (independent of zoom/pan)
+// Receiver: converts page coords → screen coords using their own camera
 function LiveCursors({ boardId, userId, userEmail }) {
   const editor = useEditor()
   const [peers, setPeers] = useState({})
   const channelRef = useRef(null)
   const rafRef = useRef(null)
+  // Force re-render when camera changes so peer cursors reposition
+  const [, setCameraTick] = useState(0)
 
   useEffect(() => {
-    if (!editor || !boardId || !userId) {
-      console.log('[Cursors] Missing deps:', { editor: !!editor, boardId, userId })
-      return
-    }
-
-    console.log('[Cursors] Initializing for user:', userId)
+    if (!editor || !boardId || !userId) return
 
     const userColor = getColorForUser(userId)
     const channel = supabase.channel(`cursors:${boardId}`, {
@@ -700,125 +699,131 @@ function LiveCursors({ boardId, userId, userEmail }) {
     })
     channelRef.current = channel
 
-    // Track presence state
+    // ── Presence sync ──
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
         const peerData = {}
-
         Object.values(state).forEach(presences => {
           presences.forEach(presence => {
             if (presence.id !== userId) {
               peerData[presence.id] = presence
-              // console.log('[Cursors] Peer data:', presence)
             }
           })
         })
-
         setPeers(peerData)
-        // console.log('[Cursors] Active peers:', Object.keys(peerData).length)
-      })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('[Cursors] Peer joined:', key)
-      })
-      .on('presence', { event: 'leave' }, ({ key }) => {
-        console.log('[Cursors] Peer left:', key)
       })
       .subscribe(async (status) => {
-        console.log('[Cursors] Channel status:', status)
         if (status === 'SUBSCRIBED') {
           await channel.track({
             id: userId,
             email: userEmail,
             color: userColor,
-            cursor: { x: 0, y: 0 },
+            cursor: null,
             timestamp: Date.now()
           })
-          console.log('[Cursors] Initial track sent')
         }
       })
 
-    // Cursor position tracking with RAF for smooth updates
+    // ── Send cursor position in PAGE coordinates ──
+    // Page coords are independent of zoom/pan — this is how Figma does it
     let lastSentTime = 0
-    const THROTTLE_MS = 40 // ~25fps for smoother updates
+    let lastX = 0, lastY = 0
+    const THROTTLE_MS = 50
 
-    const updateCursor = () => {
+    const trackCursor = () => {
       const now = Date.now()
-
-      // Throttle to ~25 updates per second for smoother feel
       if (now - lastSentTime < THROTTLE_MS) {
-        rafRef.current = requestAnimationFrame(updateCursor)
+        rafRef.current = requestAnimationFrame(trackCursor)
         return
       }
 
       try {
-        // Get screen coordinates
-        const screenPoint = editor.inputs.currentScreenPoint
+        // Use PAGE point (canvas coordinates), not screen point
+        const pagePoint = editor.inputs.currentPagePoint
+        if (pagePoint) {
+          const dx = Math.abs(pagePoint.x - lastX)
+          const dy = Math.abs(pagePoint.y - lastY)
 
-        if (screenPoint && (screenPoint.x !== 0 || screenPoint.y !== 0)) {
-          channel.track({
-            id: userId,
-            email: userEmail,
-            color: userColor,
-            cursor: {
-              x: Math.round(screenPoint.x),
-              y: Math.round(screenPoint.y)
-            },
-            timestamp: now
-          })
+          // Only send if cursor actually moved (threshold 1px in page space)
+          if (dx > 1 || dy > 1) {
+            lastX = pagePoint.x
+            lastY = pagePoint.y
 
-          lastSentTime = now
+            channel.track({
+              id: userId,
+              email: userEmail,
+              color: userColor,
+              cursor: {
+                x: Math.round(pagePoint.x * 10) / 10,
+                y: Math.round(pagePoint.y * 10) / 10
+              },
+              timestamp: now
+            })
+            lastSentTime = now
+          }
         }
-      } catch (error) {
-        console.error('[Cursors] Update error:', error)
+      } catch (e) { /* silent */ }
+
+      rafRef.current = requestAnimationFrame(trackCursor)
+    }
+
+    rafRef.current = requestAnimationFrame(trackCursor)
+
+    // ── Listen to camera changes (pan/zoom) to reposition peer cursors ──
+    const unsubCamera = editor.store.listen((entry) => {
+      if (entry.changes.updated) {
+        const hasCameraChange = Object.values(entry.changes.updated).some(
+          ([, record]) => record.typeName === 'camera'
+        )
+        if (hasCameraChange) {
+          setCameraTick(n => n + 1)
+        }
       }
-
-      rafRef.current = requestAnimationFrame(updateCursor)
-    }
-
-    // Start continuous cursor tracking
-    rafRef.current = requestAnimationFrame(updateCursor)
-    console.log('[Cursors] Started cursor tracking')
-
-    // Set user preferences in tldraw
-    try {
-      editor.user.updateUserPreferences({
-        id: userId,
-        name: userEmail,
-        color: userColor
-      })
-      console.log('[Cursors] User preferences set')
-    } catch (error) {
-      console.error('[Cursors] User preferences error:', error)
-    }
+    })
 
     // Cleanup
     return () => {
-      console.log('[Cursors] Cleanup')
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-      }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      unsubCamera()
       supabase.removeChannel(channel)
     }
   }, [editor, boardId, userId, userEmail])
 
-  // Render peer cursors
-  // console.log('[Cursors] Rendering', Object.keys(peers).length, 'peer cursors')
+  if (!editor) return null
+
+  // ── Render: convert each peer's page coords → this viewer's screen coords ──
+  const camera = editor.getCamera()
+  const container = editor.getContainer()
+  const rect = container?.getBoundingClientRect()
+  const offsetX = rect?.left ?? 0
+  const offsetY = rect?.top ?? 0
 
   return (
     <>
       {Object.values(peers).map(peer => {
-        const x = peer.cursor?.x ?? 0
-        const y = peer.cursor?.y ?? 0
-        // console.log('[Cursors] Rendering peer:', peer.email, 'at', x, y)
+        // Skip peers without cursor data
+        if (!peer.cursor) return null
+
+        const pageX = peer.cursor.x
+        const pageY = peer.cursor.y
+
+        // Convert page coords → canvas-relative coords using this viewer's camera
+        // Formula: screenPos = (pagePos + camera.offset) * zoom
+        const canvasX = (pageX + camera.x) * camera.z
+        const canvasY = (pageY + camera.y) * camera.z
+
+        // Add container offset to get viewport-fixed position
+        const screenX = canvasX + offsetX
+        const screenY = canvasY + offsetY
 
         return (
           <PeerCursor
             key={peer.id}
             email={peer.email}
             color={peer.color}
-            x={x}
-            y={y}
+            x={screenX}
+            y={screenY}
           />
         )
       })}
@@ -826,10 +831,11 @@ function LiveCursors({ boardId, userId, userEmail }) {
   )
 }
 
-// Peer cursor component
+// Figma-style peer cursor — arrow pointer with name pill
 function PeerCursor({ email, color, x, y }) {
-  // Get short name from email
-  const displayName = email ? (email.includes('@') ? email.split('@')[0] : email) : 'User'
+  const displayName = email
+    ? (email.includes('@') ? email.split('@')[0] : email)
+    : 'User'
 
   return (
     <div style={{
@@ -840,40 +846,47 @@ function PeerCursor({ email, color, x, y }) {
       pointerEvents: 'none',
       zIndex: 99999,
       willChange: 'transform',
-      transition: 'transform 0.08s cubic-bezier(0.25, 0.1, 0.25, 1)'
+      transition: 'transform 0.1s cubic-bezier(0.22, 1, 0.36, 1)'
     }}>
-      {/* Cursor arrow */}
+      {/* Figma-style cursor arrow */}
       <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
+        width="18"
+        height="22"
+        viewBox="0 0 18 22"
+        fill="none"
         style={{
           display: 'block',
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
+          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))'
         }}
       >
+        {/* Arrow shape — classic pointer, tip at (0,0) */}
         <path
-          d="M5.65376 12.3673L14.8516 21.5652C15.5909 22.3045 16.8279 22.0714 17.2611 21.1228L22.5528 10.6021C22.9859 9.65348 22.1775 8.61169 21.1491 8.78165L7.12345 10.9712C6.09501 11.1412 5.6444 12.3481 6.34444 13.0481L9.48146 16.185"
+          d="M0.5 0.5L17 11L9.5 12.5L5 21L0.5 0.5Z"
           fill={color}
           stroke="white"
-          strokeWidth="1.5"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
         />
       </svg>
 
-      {/* Name label - positioned below and to the right */}
+      {/* Name pill — Figma style, attached below-right of cursor */}
       <div style={{
         position: 'absolute',
-        left: 24,
-        top: 24,
+        left: 12,
+        top: 18,
         background: color,
         color: '#fff',
-        padding: '4px 10px',
-        borderRadius: 12,
+        padding: '2px 8px',
+        borderRadius: 4,
         fontSize: 11,
         fontWeight: 600,
         whiteSpace: 'nowrap',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        lineHeight: '16px'
+        lineHeight: '16px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+        letterSpacing: '0.01em',
+        maxWidth: 120,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
       }}>
         {displayName}
       </div>
