@@ -9,6 +9,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import ChatSidebar from '../components/ChatSidebar'
 import ShareModal from '../components/ShareModal'
+import OnlineUsersSidebar from '../components/OnlineUsersSidebar'
 import 'tldraw/tldraw.css'
 
 export default function Board() {
@@ -21,6 +22,7 @@ export default function Board() {
   const [publicAccess, setPublicAccess] = useState('restricted')
   const [onlineUsers, setOnlineUsers] = useState(new Map())
   const [chatOpen, setChatOpen] = useState(true)
+  const [usersOpen, setUsersOpen] = useState(true)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -338,6 +340,28 @@ export default function Board() {
             <span>💬</span>
             <span>{chatOpen ? 'Hide' : 'Show'}</span>
           </button>
+
+          {/* Users toggle */}
+          <button
+            onClick={() => setUsersOpen(!usersOpen)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              background: usersOpen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+              border: usersOpen ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: 8,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <span>👥</span>
+            <span>{usersOpen ? 'Hide' : 'Show'}</span>
+          </button>
         </div>
       </div>
 
@@ -359,6 +383,13 @@ export default function Board() {
 
         {chatOpen && (
           <ChatSidebar boardId={boardId} userId={userId} userEmail={userEmail} />
+        )}
+
+        {usersOpen && (
+          <OnlineUsersSidebar
+            users={onlineUsers}
+            currentUserId={userId}
+          />
         )}
       </div>
 
@@ -711,11 +742,13 @@ function LiveCursors({ editor, boardId, userId, userEmail }) {
 
     // Cursor position tracking with RAF for smooth updates
     let lastSentTime = 0
+    const THROTTLE_MS = 40 // ~25fps for smoother updates
+
     const updateCursor = () => {
       const now = Date.now()
 
-      // Throttle to 20 updates per second
-      if (now - lastSentTime < 50) {
+      // Throttle to ~25 updates per second for smoother feel
+      if (now - lastSentTime < THROTTLE_MS) {
         rafRef.current = requestAnimationFrame(updateCursor)
         return
       }
@@ -725,8 +758,6 @@ function LiveCursors({ editor, boardId, userId, userEmail }) {
         const screenPoint = editor.inputs.currentScreenPoint
 
         if (screenPoint && (screenPoint.x !== 0 || screenPoint.y !== 0)) {
-          // console.log('[Cursors] Tracking position:', { x: screenPoint.x, y: screenPoint.y })
-
           channel.track({
             id: userId,
             email: userEmail,
@@ -799,6 +830,9 @@ function LiveCursors({ editor, boardId, userId, userEmail }) {
 
 // Peer cursor component
 function PeerCursor({ email, color, x, y }) {
+  // Get short name from email
+  const displayName = email ? (email.includes('@') ? email.split('@')[0] : email) : 'User'
+
   return (
     <div style={{
       position: 'fixed',
@@ -808,7 +842,7 @@ function PeerCursor({ email, color, x, y }) {
       pointerEvents: 'none',
       zIndex: 99999,
       willChange: 'transform',
-      transition: 'transform 0.1s cubic-bezier(0.17, 0.67, 0.5, 0.71)'
+      transition: 'transform 0.08s cubic-bezier(0.25, 0.1, 0.25, 1)'
     }}>
       {/* Cursor arrow */}
       <svg
@@ -843,7 +877,7 @@ function PeerCursor({ email, color, x, y }) {
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         lineHeight: '16px'
       }}>
-        {email}
+        {displayName}
       </div>
     </div>
   )
