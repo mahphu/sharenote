@@ -409,7 +409,6 @@ export default function Board() {
 // Tldraw canvas with real-time sync and live cursors
 function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   const [store, setStore] = useState(null)
-  const [editor, setEditor] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // Initialize store
@@ -490,17 +489,14 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
         store={store}
         autoFocus
         readOnly={isReadOnly}
-        onMount={(editor) => setEditor(editor)}
       >
         <RealtimeSync
-          editor={editor}
           store={store}
           boardId={boardId}
           userId={userId}
           enabled={!isReadOnly}
         />
         <LiveCursors
-          editor={editor}
           boardId={boardId}
           userId={userId}
           userEmail={userEmail}
@@ -511,8 +507,9 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   )
 }
 
-// Real-time sync component
-function RealtimeSync({ editor, store, boardId, userId, enabled }) {
+// Real-time sync component — uses useEditor() hook (child of <Tldraw>)
+function RealtimeSync({ store, boardId, userId, enabled }) {
+  const editor = useEditor()
   const channelRef = useRef(null)
   const isSyncingRef = useRef(false)
   const saveTimeoutRef = useRef(null)
@@ -682,8 +679,9 @@ function RealtimeSync({ editor, store, boardId, userId, enabled }) {
   return null
 }
 
-// Live cursors component
-function LiveCursors({ editor, boardId, userId, userEmail }) {
+// Live cursors component — uses useEditor() hook (child of <Tldraw>)
+function LiveCursors({ boardId, userId, userEmail }) {
+  const editor = useEditor()
   const [peers, setPeers] = useState({})
   const channelRef = useRef(null)
   const rafRef = useRef(null)
