@@ -537,41 +537,16 @@ html, body {
   50% { opacity: 0.4; }
 }
 
-/* ---------- Tldraw Dark Mode ---------- */
-.tldraw-dark {
-  --color-background: #0a0a0f !important;
-  --color-low: #12121a !important;
-  --color-low-border: rgba(255, 255, 255, 0.08) !important;
-  --color-panel: rgba(255, 255, 255, 0.06) !important;
-  --color-text: #f0f0f5 !important;
-  --color-text-0: rgba(240, 240, 245, 0.5) !important;
-  --color-text-1: #f0f0f5 !important;
-  --color-selected: #8b5cf6 !important;
-  --color-primary: #8b5cf6 !important;
+/* ---------- Tldraw Dark Mode Override ---------- */
+/* tldraw v4 uses .tl-theme__dark for dark mode and --tl- prefix for CSS vars */
+.tl-theme__dark {
+  --tl-color-background: #0a0a0f;
 }
 
-.tldraw-dark .tl-container {
-  background-color: #0a0a0f !important;
+.tl-theme__light {
+  --tl-color-background: #0a0a0f;
 }
 
-.tldraw-dark .tl-background {
-  background-color: #0a0a0f !important;
-}
-
-/* Tldraw container fills available space */
-.tldraw {
-  position: relative !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden !important;
-}
-
-.tl-container {
-  position: relative !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden !important;
-}
 
 /* Chat scrollbar styling */
 ::-webkit-scrollbar {
