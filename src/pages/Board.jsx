@@ -538,13 +538,17 @@ function RealtimeSync({ boardId, userId, enabled }) {
 
           editor.store.mergeRemoteChanges(() => {
             if (added && added.length > 0) {
-              editor.store.put(added)
+              // Create clean records without store-specific metadata
+              const cleanRecords = added.map(r => ({ ...r }))
+              editor.store.put(cleanRecords)
             }
             if (updated && updated.length > 0) {
-              editor.store.put(updated)
+              const cleanRecords = updated.map(r => ({ ...r }))
+              editor.store.put(cleanRecords)
             }
             if (removed && removed.length > 0) {
-              editor.store.remove(removed.map(r => r.id))
+              const ids = removed.map(r => r.id)
+              editor.store.remove(ids)
             }
           })
 
@@ -552,14 +556,17 @@ function RealtimeSync({ boardId, userId, enabled }) {
         } catch (error) {
           console.error('[Sync] Apply error:', error)
         } finally {
-          setTimeout(() => { isSyncingRef.current = false }, 50)
+          setTimeout(() => { isSyncingRef.current = false }, 100)
         }
       })
       .subscribe()
 
     // Listen to local changes and broadcast them
     const unsubscribe = editor.store.listen((entry) => {
-      if (isSyncingRef.current || entry.source !== 'user') return
+      // IMPORTANT: Only process user-originated changes
+      // This prevents infinite loops from mergeRemoteChanges triggering this listener
+      if (isSyncingRef.current) return
+      if (entry.source !== 'user') return
 
       try {
         const changes = entry.changes
@@ -571,7 +578,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
         if (changes.added) {
           Object.values(changes.added).forEach(record => {
             if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
-              added.push(record)
+              added.push({ ...record }) // Clone to avoid reference issues
             }
           })
         }
@@ -579,7 +586,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
         if (changes.updated) {
           Object.values(changes.updated).forEach(([_from, to]) => {
             if (to.typeName !== 'camera' && to.typeName !== 'instance' && to.typeName !== 'instance_page_state') {
-              updated.push(to)
+              updated.push({ ...to }) // Clone
             }
           })
         }
@@ -587,7 +594,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
         if (changes.removed) {
           Object.values(changes.removed).forEach(record => {
             if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
-              removed.push(record)
+              removed.push({ ...record }) // Clone
             }
           })
         }
@@ -612,7 +619,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
           const allRecords = editor.store.allRecords()
           const snapshot = {
             store: Object.fromEntries(
-              allRecords.map(record => [record.id, record])
+              allRecords.map(record => [record.id, { ...record }]) // Deep clone for serialization
             ),
             schema: { schemaVersion: 2, sequences: {} }
           }
