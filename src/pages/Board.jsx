@@ -1,10 +1,10 @@
 // ============================================
 // SHARENOTE — Board.jsx (Complete Real-time Canvas)
-// Real-time sync, live cursors, continuous persistence
+// Real-time drawing sync, live cursors, persistence
 // ============================================
 
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { Tldraw, useEditor } from 'tldraw'
+import { Tldraw, useEditor, track } from 'tldraw'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import ChatSidebar from '../components/ChatSidebar'
@@ -72,7 +72,7 @@ export default function Board() {
     init()
   }, [slug, navigate])
 
-  // Track online users
+  // Track online users via Supabase Presence
   useEffect(() => {
     if (!boardId || !userId || !userEmail) return
 
@@ -107,22 +107,18 @@ export default function Board() {
     if (!isOwner) return
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete board "${slug}"?\n\nThis action cannot be undone. All drawings and messages will be permanently deleted.`
+      `Are you sure you want to delete board "${slug}"?\n\nThis action cannot be undone.`
     )
-
     if (!confirmed) return
 
     try {
       setDeleting(true)
-
-      // Delete board from database
       const { error } = await supabase
         .from('boards')
         .delete()
         .eq('id', boardId)
 
       if (error) throw error
-
       alert('Board deleted successfully.')
       navigate('/')
     } catch (error) {
@@ -406,26 +402,19 @@ export default function Board() {
   )
 }
 
-// Tldraw canvas with real-time sync and live cursors
+// ============================================
+// TldrawCanvas — Wrapper that loads saved state, then renders <Tldraw>
+// ============================================
 function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
-  const [store, setStore] = useState(null)
+  const [initialSnapshot, setInitialSnapshot] = useState(undefined)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Initialize store
+  // Load saved canvas state from database on mount
   useEffect(() => {
     if (!boardId) return
 
-    let mounted = true
-
-    async function init() {
+    async function loadSavedState() {
       try {
-        const { createTLStore, defaultShapeUtils } = await import('tldraw')
-
-        if (!mounted) return
-
-        const tlStore = createTLStore({ shapeUtils: defaultShapeUtils })
-
-        // Load saved state
         const { data, error } = await supabase
           .from('boards')
           .select('canvas_data')
@@ -433,38 +422,24 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
           .single()
 
         if (!error && data?.canvas_data) {
-          try {
-            const snapshot = data.canvas_data
-
-            // Load records vào store
-            if (snapshot.store) {
-              const records = Object.values(snapshot.store)
-              console.log('[Canvas] Loading', records.length, 'records')
-
-              tlStore.put(records)
-              console.log('[Canvas] ✅ Loaded saved state')
-            }
-          } catch (err) {
-            console.error('[Canvas] Load error:', err)
-          }
+          console.log('[Canvas] Found saved state')
+          setInitialSnapshot(data.canvas_data)
         } else {
           console.log('[Canvas] No saved state found')
+          setInitialSnapshot(null)
         }
-
-        setStore(tlStore)
+      } catch (err) {
+        console.error('[Canvas] Load error:', err)
+        setInitialSnapshot(null)
+      } finally {
         setIsLoading(false)
-      } catch (error) {
-        console.error('[TldrawCanvas] Init error:', error)
-        if (mounted) alert('Failed to initialize canvas')
       }
     }
 
-    init()
-
-    return () => { mounted = false }
+    loadSavedState()
   }, [boardId])
 
-  if (isLoading || !store) {
+  if (isLoading) {
     return (
       <div style={{
         width: '100%',
@@ -486,12 +461,33 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Tldraw
-        store={store}
         autoFocus
-        readOnly={isReadOnly}
+        inferDarkMode
+        onMount={(editor) => {
+          // Load saved snapshot into the editor
+          if (initialSnapshot && initialSnapshot.store) {
+            try {
+              const records = Object.values(initialSnapshot.store)
+              // Filter out camera/instance records to avoid conflicts
+              const contentRecords = records.filter(
+                r => r.typeName !== 'camera' && r.typeName !== 'instance' && r.typeName !== 'instance_page_state'
+              )
+              if (contentRecords.length > 0) {
+                editor.store.put(contentRecords)
+                console.log('[Canvas] ✅ Loaded', contentRecords.length, 'records from DB')
+              }
+            } catch (err) {
+              console.error('[Canvas] Snapshot load error:', err)
+            }
+          }
+
+          // Set read-only mode
+          if (isReadOnly) {
+            editor.updateInstanceState({ isReadonly: true })
+          }
+        }}
       >
         <RealtimeSync
-          store={store}
           boardId={boardId}
           userId={userId}
           enabled={!isReadOnly}
@@ -507,59 +503,44 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   )
 }
 
-// Real-time sync component — uses useEditor() hook (child of <Tldraw>)
-function RealtimeSync({ store, boardId, userId, enabled }) {
+// ============================================
+// RealtimeSync — Broadcasts drawing changes via Supabase channel
+// Uses useEditor() hook (must be child of <Tldraw>)
+// ============================================
+function RealtimeSync({ boardId, userId, enabled }) {
   const editor = useEditor()
   const channelRef = useRef(null)
   const isSyncingRef = useRef(false)
   const saveTimeoutRef = useRef(null)
 
-  // Broadcast changes
   useEffect(() => {
-    if (!store || !boardId || !enabled) return
+    if (!editor || !boardId || !enabled) return
 
     const channel = supabase.channel(`sync:${boardId}`)
     channelRef.current = channel
 
-    // Listen to remote changes
+    // Listen to remote drawing changes
     channel
-      .on('broadcast', { event: 'change' }, ({ payload }) => {
-        if (isSyncingRef.current || payload.userId === userId) return
+      .on('broadcast', { event: 'draw' }, ({ payload }) => {
+        if (isSyncingRef.current || payload.senderId === userId) return
 
         try {
           isSyncingRef.current = true
-          const { changes } = payload
+          const { added, updated, removed } = payload
 
-          store.mergeRemoteChanges(() => {
-            // Chỉ đồng bộ shapes (nội dung vẽ), không đồng bộ camera/viewport
-            if (changes.added) {
-              Object.values(changes.added).forEach(record => {
-                // Bỏ qua camera và instance records
-                if (record.typeName !== 'camera' && record.typeName !== 'instance') {
-                  store.put([record])
-                }
-              })
+          editor.store.mergeRemoteChanges(() => {
+            if (added && added.length > 0) {
+              editor.store.put(added)
             }
-            if (changes.updated) {
-              Object.values(changes.updated).forEach(([_, record]) => {
-                // Bỏ qua camera và instance records
-                if (record.typeName !== 'camera' && record.typeName !== 'instance') {
-                  store.put([record])
-                }
-              })
+            if (updated && updated.length > 0) {
+              editor.store.put(updated)
             }
-            if (changes.removed) {
-              Object.keys(changes.removed).forEach(id => {
-                // Bỏ qua camera và instance records
-                const record = changes.removed[id]
-                if (record.typeName !== 'camera' && record.typeName !== 'instance') {
-                  store.remove([id])
-                }
-              })
+            if (removed && removed.length > 0) {
+              editor.store.remove(removed.map(r => r.id))
             }
           })
 
-          console.log('[Sync] Applied remote changes (content only)')
+          console.log('[Sync] Applied remote changes')
         } catch (error) {
           console.error('[Sync] Apply error:', error)
         } finally {
@@ -568,85 +549,65 @@ function RealtimeSync({ store, boardId, userId, enabled }) {
       })
       .subscribe()
 
-    // Broadcast local changes
-    const unsubscribe = store.listen((entry) => {
+    // Listen to local changes and broadcast them
+    const unsubscribe = editor.store.listen((entry) => {
       if (isSyncingRef.current || entry.source !== 'user') return
 
       try {
         const changes = entry.changes
+        const added = []
+        const updated = []
+        const removed = []
 
-        // Chỉ broadcast shapes (nội dung vẽ), không broadcast camera/viewport
-        const filteredChanges = {
-          added: {},
-          updated: {},
-          removed: {}
-        }
-
+        // Collect only drawing content (not camera/viewport)
         if (changes.added) {
-          Object.entries(changes.added).forEach(([id, record]) => {
-            if (record.typeName !== 'camera' && record.typeName !== 'instance') {
-              filteredChanges.added[id] = record
+          Object.values(changes.added).forEach(record => {
+            if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
+              added.push(record)
             }
           })
         }
 
         if (changes.updated) {
-          Object.entries(changes.updated).forEach(([id, [from, to]]) => {
-            if (to.typeName !== 'camera' && to.typeName !== 'instance') {
-              filteredChanges.updated[id] = [from, to]
+          Object.values(changes.updated).forEach(([_from, to]) => {
+            if (to.typeName !== 'camera' && to.typeName !== 'instance' && to.typeName !== 'instance_page_state') {
+              updated.push(to)
             }
           })
         }
 
         if (changes.removed) {
-          Object.entries(changes.removed).forEach(([id, record]) => {
-            if (record.typeName !== 'camera' && record.typeName !== 'instance') {
-              filteredChanges.removed[id] = record
+          Object.values(changes.removed).forEach(record => {
+            if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
+              removed.push(record)
             }
           })
         }
 
-        // Chỉ broadcast nếu có thay đổi thực sự
-        const hasChanges =
-          Object.keys(filteredChanges.added).length > 0 ||
-          Object.keys(filteredChanges.updated).length > 0 ||
-          Object.keys(filteredChanges.removed).length > 0
-
+        // Only broadcast if there are actual drawing changes
+        const hasChanges = added.length > 0 || updated.length > 0 || removed.length > 0
         if (hasChanges) {
           channel.send({
             type: 'broadcast',
-            event: 'change',
-            payload: {
-              userId,
-              changes: filteredChanges,
-              timestamp: Date.now()
-            }
+            event: 'draw',
+            payload: { senderId: userId, added, updated, removed }
           })
-          console.log('[Sync] Broadcasted content changes')
         }
       } catch (error) {
         console.error('[Sync] Broadcast error:', error)
       }
 
-      // Auto-save to database (debounced)
+      // Auto-save to database (debounced 2s)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       saveTimeoutRef.current = setTimeout(async () => {
         try {
-          console.log('[Sync] Starting auto-save...')
-
-          // Lấy tất cả records từ store
-          const allRecords = store.allRecords()
+          const allRecords = editor.store.allRecords()
           const snapshot = {
             store: Object.fromEntries(
               allRecords.map(record => [record.id, record])
             ),
-            schema: {
-              schemaVersion: 2,
-              sequences: {}
-            }
+            schema: { schemaVersion: 2, sequences: {} }
           }
-
-          console.log('[Sync] Snapshot records:', allRecords.length)
 
           const { error } = await supabase
             .from('boards')
@@ -656,15 +617,10 @@ function RealtimeSync({ store, boardId, userId, enabled }) {
             })
             .eq('id', boardId)
 
-          if (error) {
-            console.error('[Sync] Auto-save failed:', error)
-            throw error
-          }
-
-          console.log('[Sync] ✅ Auto-saved to database successfully')
+          if (error) throw error
+          console.log('[Sync] ✅ Auto-saved')
         } catch (error) {
           console.error('[Sync] Auto-save error:', error)
-          // Không alert nữa vì có thể spam
         }
       }, 2000)
     }, { source: 'user', scope: 'all' })
@@ -674,21 +630,20 @@ function RealtimeSync({ store, boardId, userId, enabled }) {
       supabase.removeChannel(channel)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
-  }, [store, boardId, userId, enabled])
+  }, [editor, boardId, userId, enabled])
 
   return null
 }
 
-// Live cursors component — Figma-style using PAGE coordinates
-// Sender: tracks cursor in canvas/page space (independent of zoom/pan)
-// Receiver: converts page coords → screen coords using their own camera
-function LiveCursors({ boardId, userId, userEmail }) {
+// ============================================
+// LiveCursors — Broadcasts and renders remote cursors
+// Uses Supabase Presence in PAGE coordinates (zoom/pan independent)
+// ============================================
+const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
   const editor = useEditor()
   const [peers, setPeers] = useState({})
   const channelRef = useRef(null)
-  const rafRef = useRef(null)
-  // Force re-render when camera changes so peer cursors reposition
-  const [, setCameraTick] = useState(0)
+  const lastSentRef = useRef(0)
 
   useEffect(() => {
     if (!editor || !boardId || !userId) return
@@ -699,7 +654,7 @@ function LiveCursors({ boardId, userId, userEmail }) {
     })
     channelRef.current = channel
 
-    // ── Presence sync ──
+    // Listen for presence sync (cursor positions from other users)
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
@@ -719,103 +674,61 @@ function LiveCursors({ boardId, userId, userEmail }) {
             id: userId,
             email: userEmail,
             color: userColor,
-            cursor: null,
-            timestamp: Date.now()
+            cx: null,
+            cy: null,
           })
         }
       })
 
-    // ── Send cursor position in PAGE coordinates ──
-    // Page coords are independent of zoom/pan — this is how Figma does it
-    let lastSentTime = 0
-    let lastX = 0, lastY = 0
-    const THROTTLE_MS = 50
-
-    const trackCursor = () => {
+    // Track mouse movement and send to channel (throttled 50ms)
+    const handlePointerMove = () => {
       const now = Date.now()
-      if (now - lastSentTime < THROTTLE_MS) {
-        rafRef.current = requestAnimationFrame(trackCursor)
-        return
-      }
+      if (now - lastSentRef.current < 50) return
+      lastSentRef.current = now
 
       try {
-        // Use PAGE point (canvas coordinates), not screen point
         const pagePoint = editor.inputs.currentPagePoint
-        if (pagePoint) {
-          const dx = Math.abs(pagePoint.x - lastX)
-          const dy = Math.abs(pagePoint.y - lastY)
+        if (!pagePoint) return
 
-          // Only send if cursor actually moved (threshold 1px in page space)
-          if (dx > 1 || dy > 1) {
-            lastX = pagePoint.x
-            lastY = pagePoint.y
-
-            channel.track({
-              id: userId,
-              email: userEmail,
-              color: userColor,
-              cursor: {
-                x: Math.round(pagePoint.x * 10) / 10,
-                y: Math.round(pagePoint.y * 10) / 10
-              },
-              timestamp: now
-            })
-            lastSentTime = now
-          }
-        }
-      } catch (e) { /* silent */ }
-
-      rafRef.current = requestAnimationFrame(trackCursor)
+        channel.track({
+          id: userId,
+          email: userEmail,
+          color: userColor,
+          cx: Math.round(pagePoint.x * 10) / 10,
+          cy: Math.round(pagePoint.y * 10) / 10,
+        })
+      } catch (e) {
+        // silent
+      }
     }
 
-    rafRef.current = requestAnimationFrame(trackCursor)
+    // Use the tldraw container element to listen for pointer moves
+    const container = editor.getContainer()
+    if (container) {
+      container.addEventListener('pointermove', handlePointerMove)
+    }
 
-    // ── Listen to camera changes (pan/zoom) to reposition peer cursors ──
-    const unsubCamera = editor.store.listen((entry) => {
-      if (entry.changes.updated) {
-        const hasCameraChange = Object.values(entry.changes.updated).some(
-          ([, record]) => record.typeName === 'camera'
-        )
-        if (hasCameraChange) {
-          setCameraTick(n => n + 1)
-        }
-      }
-    })
-
-    // Cleanup
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      unsubCamera()
+      if (container) {
+        container.removeEventListener('pointermove', handlePointerMove)
+      }
       supabase.removeChannel(channel)
     }
   }, [editor, boardId, userId, userEmail])
 
   if (!editor) return null
 
-  // ── Render: convert each peer's page coords → this viewer's screen coords ──
+  // Convert each peer's PAGE coordinates → screen coordinates using local camera
   const camera = editor.getCamera()
-  const container = editor.getContainer()
-  const rect = container?.getBoundingClientRect()
-  const offsetX = rect?.left ?? 0
-  const offsetY = rect?.top ?? 0
 
   return (
     <>
       {Object.values(peers).map(peer => {
-        // Skip peers without cursor data
-        if (!peer.cursor) return null
+        if (peer.cx == null || peer.cy == null) return null
 
-        const pageX = peer.cursor.x
-        const pageY = peer.cursor.y
-
-        // Convert page coords → canvas-relative coords using this viewer's camera
-        // Formula: screenPos = (pagePos + camera.offset) * zoom
-        const canvasX = (pageX + camera.x) * camera.z
-        const canvasY = (pageY + camera.y) * camera.z
-
-        // Add container offset to get viewport-fixed position
-        const screenX = canvasX + offsetX
-        const screenY = canvasY + offsetY
+        // Page coords → screen coords: screenX = (pageX + camera.x) * camera.z
+        const screenX = (peer.cx + camera.x) * camera.z
+        const screenY = (peer.cy + camera.y) * camera.z
 
         return (
           <PeerCursor
@@ -829,9 +742,11 @@ function LiveCursors({ boardId, userId, userEmail }) {
       })}
     </>
   )
-}
+})
 
-// Figma-style peer cursor — arrow pointer with name pill
+// ============================================
+// PeerCursor — Figma-style arrow + name pill
+// ============================================
 function PeerCursor({ email, color, x, y }) {
   const displayName = email
     ? (email.includes('@') ? email.split('@')[0] : email)
@@ -839,14 +754,14 @@ function PeerCursor({ email, color, x, y }) {
 
   return (
     <div style={{
-      position: 'fixed',
+      position: 'absolute',
       left: 0,
       top: 0,
       transform: `translate(${x}px, ${y}px)`,
       pointerEvents: 'none',
       zIndex: 99999,
       willChange: 'transform',
-      transition: 'transform 0.1s cubic-bezier(0.22, 1, 0.36, 1)'
+      transition: 'transform 80ms linear'
     }}>
       {/* Figma-style cursor arrow */}
       <svg
@@ -859,7 +774,6 @@ function PeerCursor({ email, color, x, y }) {
           filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))'
         }}
       >
-        {/* Arrow shape — classic pointer, tip at (0,0) */}
         <path
           d="M0.5 0.5L17 11L9.5 12.5L5 21L0.5 0.5Z"
           fill={color}
@@ -869,11 +783,11 @@ function PeerCursor({ email, color, x, y }) {
         />
       </svg>
 
-      {/* Name pill — Figma style, attached below-right of cursor */}
+      {/* Name pill — positioned below-right of cursor arrow */}
       <div style={{
         position: 'absolute',
-        left: 12,
-        top: 18,
+        left: 14,
+        top: 20,
         background: color,
         color: '#fff',
         padding: '2px 8px',
@@ -894,7 +808,9 @@ function PeerCursor({ email, color, x, y }) {
   )
 }
 
-// Read-only overlay
+// ============================================
+// ReadOnlyOverlay — Shows "view only" badge
+// ============================================
 function ReadOnlyOverlay() {
   return (
     <div style={{
@@ -919,7 +835,9 @@ function ReadOnlyOverlay() {
   )
 }
 
-// Generate consistent color per user
+// ============================================
+// Helper: Generate consistent color per user
+// ============================================
 function getColorForUser(userId) {
   const colors = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
