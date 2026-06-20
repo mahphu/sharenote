@@ -130,17 +130,25 @@ export default function Board() {
 
   if (!userId || !boardId) {
     return (
-      <>
-        <div className="bg-mesh" />
-        <div className="board-room">
-          <div className="board-room-card">
-            <div className="spinner" />
-            <p style={{ color: 'var(--text-secondary)', marginTop: 16 }}>
-              Connecting to room...
-            </p>
-          </div>
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#0a0a0f'
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16,
+          color: 'var(--text-secondary)'
+        }}>
+          <div className="spinner" style={{ width: 40, height: 40 }} />
+          <span>Connecting to board...</span>
         </div>
-      </>
+      </div>
     )
   }
 
