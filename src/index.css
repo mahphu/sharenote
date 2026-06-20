@@ -537,14 +537,76 @@ html, body {
   50% { opacity: 0.4; }
 }
 
-/* ---------- Tldraw Dark Mode Override ---------- */
-/* tldraw v4 uses .tl-theme__dark for dark mode and --tl- prefix for CSS vars */
+/* ---------- Tldraw Dark Theme Override ---------- */
+/* Complete dark theme customizing tldraw v4 to match Sharenote's design system */
 .tl-theme__dark {
+  /* Canvas */
+  --tl-color-background: #0a0a0f;
+  --tl-color-grid: rgba(255, 255, 255, 0.08);
+  --tl-color-snap: #8b5cf6;
+  --tl-color-selection-fill: rgba(139, 92, 246, 0.2);
+  --tl-color-selection-stroke: #8b5cf6;
+  --tl-color-brush-fill: rgba(255, 255, 255, 0.1);
+  --tl-color-brush-stroke: rgba(255, 255, 255, 0.25);
+
+  /* UI Panels & Surfaces */
+  --tl-color-low: rgba(255, 255, 255, 0.06);
+  --tl-color-low-border: rgba(255, 255, 255, 0.08);
+  --tl-color-culled: rgba(255, 255, 255, 0.06);
+  --tl-color-panel: rgba(255, 255, 255, 0.06);
+  --tl-color-panel-contrast: rgba(255, 255, 255, 0.1);
+  --tl-color-panel-overlay: rgba(0, 0, 0, 0.3);
+  --tl-color-divider: rgba(255, 255, 255, 0.06);
+  --tl-color-overlay: rgba(0, 0, 0, 0.2);
+
+  /* Muted states */
+  --tl-color-muted-none: rgba(255, 255, 255, 0);
+  --tl-color-muted-0: rgba(255, 255, 255, 0.02);
+  --tl-color-muted-1: rgba(255, 255, 255, 0.1);
+  --tl-color-muted-2: rgba(255, 255, 255, 0.04);
+  --tl-color-hint: rgba(255, 255, 255, 0.05);
+
+  /* Text colors */
+  --tl-color-text: #f0f0f5;
+  --tl-color-text-0: rgba(240, 240, 245, 0.5);
+  --tl-color-text-1: #f0f0f5;
+  --tl-color-text-3: rgba(240, 240, 245, 0.6);
+  --tl-color-text-shadow: rgba(10, 10, 15, 0.8);
+  --tl-color-text-highlight: #fbbf24;
+  --tl-color-tooltip: #1a1a20;
+
+  /* Accent colors */
+  --tl-color-selected: #8b5cf6;
+  --tl-color-selected-contrast: #ffffff;
+  --tl-color-primary: #8b5cf6;
+  --tl-color-success: #10b981;
+  --tl-color-info: #3b82f6;
+  --tl-color-warning: #f59e0b;
+  --tl-color-danger: #ef4444;
+  --tl-color-laser: #ff0000;
+
+  /* Focus */
+  --tl-color-focus: #8b5cf6;
+
+  /* Shadows */
+  --tl-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 0 0 1px var(--tl-color-panel-contrast);
+  --tl-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--tl-color-panel-contrast);
+  --tl-shadow-3: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--tl-color-panel-contrast);
+  --tl-shadow-4: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 0 0 1px var(--tl-color-panel-contrast);
+}
+
+/* Force dark mode for tldraw */
+.tl-theme__light {
   --tl-color-background: #0a0a0f;
 }
 
-.tl-theme__light {
-  --tl-color-background: #0a0a0f;
+/* Ensure tldraw container fills available space */
+.tldraw,
+.tl-container {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
 }
 
 
