@@ -470,7 +470,6 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
     <div style={{ width: '100%', height: '100%' }}>
       <Tldraw
         autoFocus
-        inferDarkMode
         onMount={(editor) => {
           // Load saved snapshot into the editor
           if (initialSnapshot && initialSnapshot.store) {
@@ -478,9 +477,10 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
               const records = Object.values(initialSnapshot.store)
               // Filter out camera/instance records to avoid conflicts
               const contentRecords = records.filter(
-                r => r.typeName !== 'camera' && r.typeName !== 'instance' && r.typeName !== 'instance_page_state'
+                r => r && r.typeName && r.typeName !== 'camera' && r.typeName !== 'instance' && r.typeName !== 'instance_page_state'
               )
               if (contentRecords.length > 0) {
+                // Use store.put directly without mergeRemoteChanges - this is initial load
                 editor.store.put(contentRecords)
                 console.log('[Canvas] ✅ Loaded', contentRecords.length, 'records from DB')
               }
@@ -493,6 +493,9 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
           if (isReadOnly) {
             editor.updateInstanceState({ isReadonly: true })
           }
+        }}
+        options={{
+          ...(isReadOnly ? { readOnly: true } : {})
         }}
       >
         <RealtimeSync
