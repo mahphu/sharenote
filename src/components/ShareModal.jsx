@@ -1,10 +1,11 @@
-// ============================================
-// SHARENOTE — ShareModal Component
-// Google Sheets-style link sharing with permissions
-// ============================================
-
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+
+const ACCESS_OPTIONS = [
+  { value: 'restricted', label: 'Restricted', desc: 'Only you can access this board.' },
+  { value: 'viewer', label: 'View only', desc: 'Anyone with the link can view but cannot edit.' },
+  { value: 'editor', label: 'Full access', desc: 'Anyone with the link can draw, edit, and chat.' },
+]
 
 export default function ShareModal({ boardId, ownerId, currentUserId, slug, onClose }) {
   const [publicAccess, setPublicAccess] = useState('restricted')
@@ -14,325 +15,110 @@ export default function ShareModal({ boardId, ownerId, currentUserId, slug, onCl
 
   const isOwner = currentUserId === ownerId
   const shareUrl = `${window.location.origin}/board/${slug}`
+  const activeOption = ACCESS_OPTIONS.find(o => o.value === publicAccess)
 
-  // Load current public access setting
   useEffect(() => {
-    async function loadAccess() {
-      try {
-        const { data, error } = await supabase
-          .from('boards')
-          .select('public_access')
-          .eq('id', boardId)
-          .single()
-
-        if (error) throw error
-
-        setPublicAccess(data.public_access || 'restricted')
+    supabase
+      .from('boards')
+      .select('public_access')
+      .eq('id', boardId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setPublicAccess(data.public_access || 'restricted')
         setLoading(false)
-      } catch (error) {
-        console.error('[ShareModal] Load error:', error)
-        alert('Failed to load sharing settings: ' + error.message)
-        setLoading(false)
-      }
-    }
-
-    loadAccess()
+      })
   }, [boardId])
 
-  // Update public access setting
-  const handleAccessChange = async (newAccess) => {
-    if (!isOwner) return
-
-    try {
-      setSaving(true)
-
-      const { error } = await supabase
-        .from('boards')
-        .update({ public_access: newAccess })
-        .eq('id', boardId)
-
-      if (error) throw error
-
-      setPublicAccess(newAccess)
-      console.log('[ShareModal] Access updated to:', newAccess)
-    } catch (error) {
-      console.error('[ShareModal] Update error:', error)
-      alert('Failed to update sharing settings: ' + error.message)
-    } finally {
-      setSaving(false)
-    }
+  const handleAccessChange = async (value) => {
+    if (!isOwner || saving) return
+    setSaving(true)
+    const { error } = await supabase
+      .from('boards')
+      .update({ public_access: value })
+      .eq('id', boardId)
+    if (!error) setPublicAccess(value)
+    setSaving(false)
   }
 
-  // Copy link to clipboard
-  const handleCopyLink = async () => {
+  const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (error) {
-      console.error('[ShareModal] Copy error:', error)
-      alert('Failed to copy link: ' + error.message)
-    }
+    } catch {}
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 20
-        }}
-      >
-        {/* Modal */}
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            background: 'rgba(18, 18, 26, 0.95)',
-            backdropFilter: 'blur(32px)',
-            WebkitBackdropFilter: 'blur(32px)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: 16,
-            padding: 32,
-            width: '100%',
-            maxWidth: 520,
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-            animation: 'modalAppear 0.2s ease-out'
-          }}
-        >
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-shell" onClick={e => e.stopPropagation()}>
+        <div className="modal-inner">
           {/* Header */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 24
-          }}>
-            <h2 style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              margin: 0
-            }}>
-              🔗 Share "{slug}"
-            </h2>
-            <button
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                fontSize: 24,
-                cursor: 'pointer',
-                padding: 4,
-                lineHeight: 1,
-                transition: 'color 0.2s'
-              }}
-              onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary)'}
-            >
-              ×
+          <div className="modal-header">
+            <div>
+              <span className="modal-eyebrow">Share</span>
+              <h2 className="modal-title">/{slug}</h2>
+            </div>
+            <button className="modal-close" onClick={onClose} aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M1 1l12 12M13 1L1 13" />
+              </svg>
             </button>
           </div>
 
           {loading ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '40px 0',
-              color: 'var(--text-secondary)'
-            }}>
-              Loading...
+            <div className="modal-loading">
+              <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />
             </div>
           ) : (
             <>
-              {/* Link Input + Copy Button */}
-              <div style={{ marginBottom: 24 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  Share Link
-                </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    type="text"
-                    value={shareUrl}
-                    readOnly
-                    style={{
-                      flex: 1,
-                      padding: '10px 14px',
-                      fontSize: 13,
-                      background: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: 8,
-                      color: 'var(--text-primary)',
-                      fontFamily: 'monospace',
-                      outline: 'none'
-                    }}
-                  />
+              {/* Link */}
+              <div className="modal-section">
+                <div className="modal-link-row">
+                  <input className="modal-link-input" type="text" value={shareUrl} readOnly />
                   <button
-                    onClick={handleCopyLink}
-                    style={{
-                      padding: '10px 20px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      background: copied
-                        ? 'rgba(16, 185, 129, 0.2)'
-                        : 'linear-gradient(135deg, var(--accent-start), var(--accent-end))',
-                      color: copied ? '#10b981' : '#fff',
-                      border: copied ? '1px solid rgba(16, 185, 129, 0.4)' : 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      whiteSpace: 'nowrap'
-                    }}
+                    className={`modal-copy-btn ${copied ? 'modal-copy-btn--done' : ''}`}
+                    onClick={handleCopy}
                   >
-                    {copied ? '✓ Copied!' : 'Copy Link'}
+                    {copied ? (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2.5 7.5L5.5 10.5L11.5 3.5" />
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                        <path d="M9.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v5A1.5 1.5 0 003 9.5h1.5" />
+                      </svg>
+                    )}
                   </button>
                 </div>
               </div>
 
-              {/* General Access Dropdown */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  General Access
-                  {!isOwner && (
-                    <span style={{
-                      marginLeft: 8,
-                      fontSize: 11,
-                      color: 'var(--text-muted)',
-                      textTransform: 'none',
-                      fontWeight: 400
-                    }}>
-                      (Owner only)
-                    </span>
-                  )}
-                </label>
-
-                <select
-                  value={publicAccess}
-                  onChange={(e) => handleAccessChange(e.target.value)}
-                  disabled={!isOwner || saving}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    fontSize: 14,
-                    background: isOwner
-                      ? 'rgba(255, 255, 255, 0.06)'
-                      : 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: 8,
-                    color: isOwner ? 'var(--text-primary)' : 'var(--text-muted)',
-                    cursor: isOwner ? 'pointer' : 'not-allowed',
-                    outline: 'none',
-                    appearance: 'none',
-                    backgroundImage: isOwner
-                      ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23f0f0f5' d='M6 8L2 4h8z'/%3E%3C/svg%3E")`
-                      : 'none',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 14px center',
-                    paddingRight: 40
-                  }}
-                >
-                  <option value="restricted">🔒 Restricted (Only owner can access)</option>
-                  <option value="viewer">👀 Anyone with the link can view</option>
-                  <option value="editor">✏️ Anyone with the link can edit</option>
-                </select>
-
-                {/* Access Description */}
-                <div style={{
-                  marginTop: 12,
-                  padding: 12,
-                  background: 'rgba(139, 92, 246, 0.08)',
-                  border: '1px solid rgba(139, 92, 246, 0.2)',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.5
-                }}>
-                  {publicAccess === 'restricted' && (
-                    <>
-                      <strong style={{ color: 'var(--text-primary)' }}>Private:</strong> Only you can access this board.
-                    </>
-                  )}
-                  {publicAccess === 'viewer' && (
-                    <>
-                      <strong style={{ color: 'var(--text-primary)' }}>View-only:</strong> Anyone with the link can view but cannot draw or edit.
-                    </>
-                  )}
-                  {publicAccess === 'editor' && (
-                    <>
-                      <strong style={{ color: 'var(--text-primary)' }}>Full access:</strong> Anyone with the link can draw, edit, and chat.
-                    </>
-                  )}
+              {/* Access */}
+              <div className="modal-section">
+                <span className="modal-label">
+                  Access
+                  {!isOwner && <span className="modal-label-hint">Owner only</span>}
+                </span>
+                <div className="modal-access-options">
+                  {ACCESS_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      className={`modal-access-btn ${publicAccess === opt.value ? 'modal-access-btn--active' : ''}`}
+                      onClick={() => handleAccessChange(opt.value)}
+                      disabled={!isOwner || saving}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Done Button */}
-              <div style={{ marginTop: 24, textAlign: 'right' }}>
-                <button
-                  onClick={onClose}
-                  style={{
-                    padding: '10px 24px',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.12)'
-                    e.target.style.borderColor = 'rgba(139, 92, 246, 0.4)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.08)'
-                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'
-                  }}
-                >
-                  Done
-                </button>
+                {activeOption && (
+                  <p className="modal-access-desc">{activeOption.desc}</p>
+                )}
               </div>
             </>
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes modalAppear {
-          from {
-            opacity: 0;
-            transform: scale(0.95) translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
-    </>
+    </div>
   )
 }
