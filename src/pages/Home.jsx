@@ -11,6 +11,7 @@ export default function Home() {
   const [boards, setBoards] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [lastCreateTime, setLastCreateTime] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -34,7 +35,19 @@ export default function Home() {
   // TẠO BẢNG MỚI — Sinh slug 8 ký tự ngẫu nhiên, insert vào DB, rồi chuyển trang
   const createBoard = async () => {
     try {
+      // Rate limiting: Max 1 board per 2 seconds
+      const now = Date.now()
+      const timeSinceLastCreate = now - lastCreateTime
+      const RATE_LIMIT_MS = 2000
+
+      if (timeSinceLastCreate < RATE_LIMIT_MS) {
+        const waitSeconds = Math.ceil((RATE_LIMIT_MS - timeSinceLastCreate) / 1000)
+        alert(`⏳ Please wait ${waitSeconds} second${waitSeconds > 1 ? 's' : ''} before creating another board.`)
+        return
+      }
+
       setCreating(true)
+      setLastCreateTime(now)
 
       // Bước 1: Kiểm tra user hiện tại
       const { data: { user }, error: authErr } = await supabase.auth.getUser()
@@ -43,8 +56,11 @@ export default function Home() {
         return
       }
 
-      // Bước 2: Tạo slug ngẫu nhiên 8 ký tự
-      const randomSlug = Math.random().toString(36).substring(2, 10)
+      // Bước 2: Tạo slug ngẫu nhiên 8 ký tự (cryptographically secure)
+      const randomSlug = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+        .map(b => b.toString(36))
+        .join('')
+        .substring(0, 10)
 
       // Bước 3: Insert vào bảng boards
       const { data, error } = await supabase

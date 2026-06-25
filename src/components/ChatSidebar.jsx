@@ -97,7 +97,15 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
   // Send message
   const sendMessage = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim()) return
+    const trimmed = newMessage.trim()
+    if (!trimmed) return
+
+    // Input validation
+    const MAX_MESSAGE_LENGTH = 5000
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      alert(`Message too long. Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`)
+      return
+    }
 
     try {
       const { error } = await supabase
@@ -105,7 +113,7 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
         .insert([{
           board_id: boardId,
           sender_id: userId,
-          content: newMessage.trim()
+          content: trimmed
         }])
 
       if (error) throw error
@@ -113,7 +121,7 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
       setNewMessage('')
     } catch (error) {
       console.error('[Chat] Send error:', error)
-      alert('Failed to send message: ' + error.message)
+      alert('Failed to send message. Please try again.')
     }
   }
 
@@ -197,24 +205,28 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
                   paddingLeft: isOwn ? 0 : 8,
                   paddingRight: isOwn ? 8 : 0
                 }}>
-                  {msg.profiles?.email || 'Unknown'}
+                  {msg.profiles?.email?.split('@')[0] || 'Unknown'}
                 </div>
-                <div style={{
-                  maxWidth: '80%',
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  color: 'var(--text-primary)',
-                  background: isOwn
-                    ? 'rgba(139, 92, 246, 0.2)'
-                    : 'rgba(255, 255, 255, 0.08)',
-                  border: isOwn
-                    ? '1px solid rgba(139, 92, 246, 0.3)'
-                    : '1px solid rgba(255, 255, 255, 0.08)',
-                  wordBreak: 'break-word'
-                }}>
-                  {msg.content}
-                </div>
+                <div
+                  ref={(el) => {
+                    if (el) el.textContent = msg.content
+                  }}
+                  style={{
+                    maxWidth: '80%',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: 'var(--text-primary)',
+                    background: isOwn
+                      ? 'rgba(139, 92, 246, 0.2)'
+                      : 'rgba(255, 255, 255, 0.08)',
+                    border: isOwn
+                      ? '1px solid rgba(139, 92, 246, 0.3)'
+                      : '1px solid rgba(255, 255, 255, 0.08)',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'pre-wrap'
+                  }}
+                />
               </div>
             )
           })
