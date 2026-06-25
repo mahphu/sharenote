@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,5 +23,19 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local only
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Claude Code
+.claude/
+.claudereignore
+
+# Temporary folders
+awesome-agent-skills/
+impeccable/
+taste-skill/
+
+# Local images
 passaway.png

@@ -538,66 +538,51 @@ html, body {
 }
 
 /* ---------- Tldraw Dark Theme Override ---------- */
-/* Complete dark theme customizing tldraw v4 to match Sharenote's design system */
+/* tldraw v2 uses .tl-theme__dark with --color-* CSS variables */
 .tl-theme__dark {
-  /* Canvas */
-  --tl-color-background: #0a0a0f;
-  --tl-color-grid: rgba(255, 255, 255, 0.08);
-  --tl-color-snap: #8b5cf6;
-  --tl-color-selection-fill: rgba(139, 92, 246, 0.2);
-  --tl-color-selection-stroke: #8b5cf6;
-  --tl-color-brush-fill: rgba(255, 255, 255, 0.1);
-  --tl-color-brush-stroke: rgba(255, 255, 255, 0.25);
-
-  /* UI Panels & Surfaces */
-  --tl-color-low: rgba(255, 255, 255, 0.06);
-  --tl-color-low-border: rgba(255, 255, 255, 0.08);
-  --tl-color-culled: rgba(255, 255, 255, 0.06);
-  --tl-color-panel: rgba(255, 255, 255, 0.06);
-  --tl-color-panel-contrast: rgba(255, 255, 255, 0.1);
-  --tl-color-panel-overlay: rgba(0, 0, 0, 0.3);
-  --tl-color-divider: rgba(255, 255, 255, 0.06);
-  --tl-color-overlay: rgba(0, 0, 0, 0.2);
-
-  /* Muted states */
-  --tl-color-muted-none: rgba(255, 255, 255, 0);
-  --tl-color-muted-0: rgba(255, 255, 255, 0.02);
-  --tl-color-muted-1: rgba(255, 255, 255, 0.1);
-  --tl-color-muted-2: rgba(255, 255, 255, 0.04);
-  --tl-color-hint: rgba(255, 255, 255, 0.05);
-
-  /* Text colors */
-  --tl-color-text: #f0f0f5;
-  --tl-color-text-0: rgba(240, 240, 245, 0.5);
-  --tl-color-text-1: #f0f0f5;
-  --tl-color-text-3: rgba(240, 240, 245, 0.6);
-  --tl-color-text-shadow: rgba(10, 10, 15, 0.8);
-  --tl-color-text-highlight: #fbbf24;
-  --tl-color-tooltip: #1a1a20;
-
-  /* Accent colors */
-  --tl-color-selected: #8b5cf6;
-  --tl-color-selected-contrast: #ffffff;
-  --tl-color-primary: #8b5cf6;
-  --tl-color-success: #10b981;
-  --tl-color-info: #3b82f6;
-  --tl-color-warning: #f59e0b;
-  --tl-color-danger: #ef4444;
-  --tl-color-laser: #ff0000;
-
-  /* Focus */
-  --tl-color-focus: #8b5cf6;
-
-  /* Shadows */
-  --tl-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 0 0 1px var(--tl-color-panel-contrast);
-  --tl-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--tl-color-panel-contrast);
-  --tl-shadow-3: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--tl-color-panel-contrast);
-  --tl-shadow-4: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 0 0 1px var(--tl-color-panel-contrast);
+  --color-background: #0a0a0f;
+  --color-grid: rgba(255, 255, 255, 0.08);
+  --color-low: rgba(255, 255, 255, 0.06);
+  --color-low-border: rgba(255, 255, 255, 0.08);
+  --color-culled: rgba(255, 255, 255, 0.06);
+  --color-panel: rgba(255, 255, 255, 0.06);
+  --color-panel-contrast: rgba(255, 255, 255, 0.1);
+  --color-panel-overlay: rgba(0, 0, 0, 0.3);
+  --color-divider: rgba(255, 255, 255, 0.06);
+  --color-overlay: rgba(0, 0, 0, 0.2);
+  --color-muted-none: rgba(255, 255, 255, 0);
+  --color-muted-0: rgba(255, 255, 255, 0.02);
+  --color-muted-1: rgba(255, 255, 255, 0.1);
+  --color-muted-2: rgba(255, 255, 255, 0.04);
+  --color-hint: rgba(255, 255, 255, 0.05);
+  --color-text: #f0f0f5;
+  --color-text-0: rgba(240, 240, 245, 0.5);
+  --color-text-1: #f0f0f5;
+  --color-text-3: rgba(240, 240, 245, 0.6);
+  --color-text-shadow: rgba(10, 10, 15, 0.8);
+  --color-selected: #8b5cf6;
+  --color-selected-contrast: #ffffff;
+  --color-selection-fill: rgba(139, 92, 246, 0.2);
+  --color-selection-stroke: #8b5cf6;
+  --color-primary: #8b5cf6;
+  --color-success: #10b981;
+  --color-info: #3b82f6;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-laser: #ff0000;
+  --color-focus: #8b5cf6;
+  --color-accent: #8b5cf6;
+  --color-brush-fill: rgba(255, 255, 255, 0.1);
+  --color-brush-stroke: rgba(255, 255, 255, 0.25);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 0 0 1px var(--color-panel-contrast);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--color-panel-contrast);
+  --shadow-3: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--color-panel-contrast);
+  --shadow-4: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 0 0 1px var(--color-panel-contrast);
 }
 
-/* Force dark mode for tldraw */
+/* Force dark mode for tldraw v2 */
 .tl-theme__light {
-  --tl-color-background: #0a0a0f;
+  --color-background: #0a0a0f;
 }
 
 /* Ensure tldraw container fills available space */
@@ -608,9 +593,6 @@ html, body {
   height: 100% !important;
   overflow: hidden !important;
 }
-
-
-/* Chat scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -626,6 +608,155 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
+}
+
+/* ---------- Board Toolbar ---------- */
+.board-toolbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 100;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.board-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.board-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.board-toolbar-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border-color: var(--border-card);
+}
+
+.board-toolbar-btn:focus-visible {
+  outline: 2px solid var(--accent-solid);
+  outline-offset: 1px;
+}
+
+.board-toolbar-btn:active {
+  transform: scale(0.97);
+}
+
+.board-toolbar-btn--active {
+  color: var(--accent-solid);
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.board-toolbar-btn--danger {
+  color: var(--text-muted);
+}
+
+.board-toolbar-btn--danger:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.board-toolbar-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.board-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+.board-slug {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-solid);
+  padding: 3px 8px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.board-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.board-badge--readonly {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.board-online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.board-canvas-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.board-canvas-wrap {
+  flex: 1;
+  position: relative;
+}
+
+.board-readonly-banner {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  letter-spacing: 0.01em;
 }
 
 /* ---------- Responsive ---------- */

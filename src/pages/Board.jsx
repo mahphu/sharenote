@@ -1,8 +1,3 @@
-// ============================================
-// SHARENOTE — Board.jsx (Complete Real-time Canvas)
-// Real-time drawing sync, live cursors, persistence
-// ============================================
-
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Tldraw, useEditor, track } from 'tldraw'
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -11,6 +6,47 @@ import ChatSidebar from '../components/ChatSidebar'
 import ShareModal from '../components/ShareModal'
 import OnlineUsersSidebar from '../components/OnlineUsersSidebar'
 import 'tldraw/tldraw.css'
+
+// SVG icon components
+function IconArrowLeft() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 12L6 8l4-4" />
+    </svg>
+  )
+}
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 4h11M5.5 4V2.5h5V4M6.5 7v4.5M9.5 7v4.5M3.5 4l.75 9.5h7.5L12.5 4" />
+    </svg>
+  )
+}
+function IconLink() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 9.5a3 3 0 004.243 0l2-2a3 3 0 00-4.243-4.243L7.5 4.257" />
+      <path d="M9.5 6.5a3 3 0 00-4.243 0l-2 2a3 3 0 004.243 4.243L8.5 11.743" />
+    </svg>
+  )
+}
+function IconChat() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 3h11v8h-6L4 13.5V11H2.5z" />
+    </svg>
+  )
+}
+function IconUsers() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="5" r="2.5" />
+      <path d="M1.5 13.5a4.5 4.5 0 019 0" />
+      <circle cx="11.5" cy="5.5" r="2" />
+      <path d="M14.5 13.5a3.5 3.5 0 00-4-3.46" />
+    </svg>
+  )
+}
 
 export default function Board() {
   const { slug } = useParams()
@@ -29,7 +65,6 @@ export default function Board() {
   const isOwner = userId && ownerId && userId === ownerId
   const isReadOnly = !isOwner && publicAccess === 'viewer'
 
-  // Load board info
   useEffect(() => {
     async function init() {
       try {
@@ -72,7 +107,6 @@ export default function Board() {
     init()
   }, [slug, navigate])
 
-  // Track online users via Supabase Presence
   useEffect(() => {
     if (!boardId || !userId || !userEmail) return
 
@@ -102,10 +136,8 @@ export default function Board() {
     return () => supabase.removeChannel(channel)
   }, [boardId, userId, userEmail])
 
-  // Delete board (owner only)
   const handleDeleteBoard = async () => {
     if (!isOwner) return
-
     const confirmed = window.confirm(
       `Are you sure you want to delete board "${slug}"?\n\nThis action cannot be undone.`
     )
@@ -130,253 +162,83 @@ export default function Board() {
 
   if (!userId || !boardId) {
     return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#0a0a0f'
-      }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 16,
-          color: 'var(--text-secondary)'
-        }}>
-          <div className="spinner" style={{ width: 40, height: 40 }} />
-          <span>Connecting to board...</span>
-        </div>
+      <div className="loading-page">
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+        <span>Connecting to board...</span>
       </div>
     )
   }
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: '#0a0a0f'
-    }}>
-      {/* Top Header Bar */}
-      <div style={{
-        height: 60,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 20px',
-        background: 'rgba(255, 255, 255, 0.06)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        zIndex: 100,
-        flexShrink: 0
-      }}>
-        {/* Left: Back button */}
-        <Link
-          to="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            fontSize: 13,
-            fontWeight: 600,
-            textDecoration: 'none',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: 8,
-            color: 'var(--text-primary)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'
-            e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'
-          }}
-        >
-          <span>←</span>
-          <span>Back</span>
-        </Link>
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+      {/* Toolbar */}
+      <div className="board-toolbar">
+        <div className="board-toolbar-group">
+          <Link to="/" className="board-toolbar-btn" title="Back to dashboard">
+            <IconArrowLeft />
+            <span>Back</span>
+          </Link>
 
-        {/* Center: Room info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <code style={{
-            background: 'rgba(139, 92, 246, 0.15)',
-            padding: '4px 10px',
-            borderRadius: 6,
-            fontFamily: 'monospace',
-            color: '#8b5cf6',
-            fontSize: 13
-          }}>
-            {slug}
-          </code>
+          <div className="board-toolbar-divider" />
+
+          <span className="board-slug">{slug}</span>
+
           {isReadOnly && (
-            <span style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 600,
-              background: 'rgba(251, 191, 36, 0.15)',
-              color: '#fbbf24',
-              border: '1px solid rgba(251, 191, 36, 0.3)',
-              borderRadius: 6,
-              textTransform: 'uppercase'
-            }}>
-              👀 View Only
-            </span>
+            <span className="board-badge board-badge--readonly">View only</span>
           )}
         </div>
 
-        {/* Right: Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Delete button (owner only) */}
+        <div className="board-toolbar-group">
           {isOwner && (
             <button
               onClick={handleDeleteBoard}
               disabled={deleting}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                background: deleting ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.12)',
-                color: deleting ? 'rgba(239, 68, 68, 0.5)' : '#ef4444',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: 8,
-                cursor: deleting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (!deleting) {
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
-                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!deleting) {
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'
-                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)'
-                }
-              }}
+              className="board-toolbar-btn board-toolbar-btn--danger"
+              title="Delete board"
+              style={deleting ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
             >
-              <span>🗑️</span>
-              <span>{deleting ? 'Deleting...' : 'Delete Board'}</span>
+              <IconTrash />
+              <span>{deleting ? 'Deleting...' : 'Delete'}</span>
             </button>
           )}
 
-          {/* Share button */}
           <button
             onClick={() => setShareModalOpen(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              borderRadius: 8,
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'
-              e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'
-            }}
+            className="board-toolbar-btn"
+            title="Share board"
           >
-            <span>🔗</span>
+            <IconLink />
             <span>Share</span>
           </button>
 
-          {/* Online users */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            fontSize: 13,
-            fontWeight: 600,
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: 8,
-            color: 'var(--text-primary)'
-          }}>
-            <span style={{
-              color: '#10b981',
-              fontSize: 14,
-              animation: 'pulse 2s ease-in-out infinite'
-            }}>●</span>
-            <span>{onlineUsers.size} online</span>
+          <div className="board-toolbar-divider" />
+
+          <div className="board-toolbar-btn" style={{ cursor: 'default' }}>
+            <span className="board-online-dot" />
+            <span>{onlineUsers.size}</span>
           </div>
 
-          {/* Chat toggle */}
           <button
             onClick={() => setChatOpen(!chatOpen)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              background: chatOpen ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-              border: chatOpen ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.12)',
-              borderRadius: 8,
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
+            className={`board-toolbar-btn${chatOpen ? ' board-toolbar-btn--active' : ''}`}
+            title={chatOpen ? 'Hide chat' : 'Show chat'}
           >
-            <span>💬</span>
-            <span>{chatOpen ? 'Hide' : 'Show'}</span>
+            <IconChat />
           </button>
 
-          {/* Users toggle */}
           <button
             onClick={() => setUsersOpen(!usersOpen)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              background: usersOpen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-              border: usersOpen ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.12)',
-              borderRadius: 8,
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
+            className={`board-toolbar-btn${usersOpen ? ' board-toolbar-btn--active' : ''}`}
+            title={usersOpen ? 'Hide users' : 'Show users'}
           >
-            <span>👥</span>
-            <span>{usersOpen ? 'Hide' : 'Show'}</span>
+            <IconUsers />
           </button>
         </div>
       </div>
 
-      {/* Canvas Area */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
-        <div style={{ flex: 1, position: 'relative' }}>
+      {/* Canvas */}
+      <div className="board-canvas-area">
+        <div className="board-canvas-wrap">
           <TldrawCanvas
             boardId={boardId}
             userId={userId}
@@ -390,10 +252,7 @@ export default function Board() {
         )}
 
         {usersOpen && (
-          <OnlineUsersSidebar
-            users={onlineUsers}
-            currentUserId={userId}
-          />
+          <OnlineUsersSidebar users={onlineUsers} currentUserId={userId} />
         )}
       </div>
 
@@ -410,14 +269,10 @@ export default function Board() {
   )
 }
 
-// ============================================
-// TldrawCanvas — Wrapper that loads saved state, then renders <Tldraw>
-// ============================================
 function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   const [initialSnapshot, setInitialSnapshot] = useState(undefined)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load saved canvas state from database on mount
   useEffect(() => {
     if (!boardId) return
 
@@ -430,10 +285,8 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
           .single()
 
         if (!error && data?.canvas_data) {
-          console.log('[Canvas] Found saved state')
           setInitialSnapshot(data.canvas_data)
         } else {
-          console.log('[Canvas] No saved state found')
           setInitialSnapshot(null)
         }
       } catch (err) {
@@ -455,12 +308,12 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0a0a0f',
+        background: 'var(--bg-primary)',
         color: 'var(--text-secondary)'
       }}>
-        <div>
-          <div className="spinner" style={{ margin: '0 auto 16px' }} />
-          <div>Loading canvas...</div>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 12px' }} />
+          <div style={{ fontSize: 13 }}>Loading canvas...</div>
         </div>
       </div>
     )
@@ -471,31 +324,35 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
       <Tldraw
         autoFocus
         onMount={(editor) => {
-          // Load saved snapshot into the editor
-          if (initialSnapshot && initialSnapshot.store) {
-            try {
-              const records = Object.values(initialSnapshot.store)
-              // Filter out camera/instance records to avoid conflicts
-              const contentRecords = records.filter(
-                r => r && r.typeName && r.typeName !== 'camera' && r.typeName !== 'instance' && r.typeName !== 'instance_page_state'
-              )
-              if (contentRecords.length > 0) {
-                // Use store.put directly without mergeRemoteChanges - this is initial load
-                editor.store.put(contentRecords)
-                console.log('[Canvas] ✅ Loaded', contentRecords.length, 'records from DB')
+          if (initialSnapshot) {
+            let loaded = false
+            if (initialSnapshot.store && initialSnapshot.schema) {
+              try {
+                editor.store.loadSnapshot(initialSnapshot)
+                loaded = true
+              } catch (err) {
+                console.warn('[Canvas] loadSnapshot failed, falling back:', err)
               }
-            } catch (err) {
-              console.error('[Canvas] Snapshot load error:', err)
+            }
+            if (!loaded && initialSnapshot.store) {
+              try {
+                const records = Object.values(initialSnapshot.store).filter(isContentRecord)
+                if (records.length > 0) {
+                  editor.store.mergeRemoteChanges(() => {
+                    for (const record of records) {
+                      try { editor.store.put([record]) } catch {}
+                    }
+                  })
+                }
+              } catch (err) {
+                console.error('[Canvas] Manual load failed:', err)
+              }
             }
           }
 
-          // Set read-only mode
           if (isReadOnly) {
             editor.updateInstanceState({ isReadonly: true })
           }
-        }}
-        options={{
-          ...(isReadOnly ? { readOnly: true } : {})
         }}
       >
         <RealtimeSync
@@ -514,15 +371,23 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   )
 }
 
-// ============================================
-// RealtimeSync — Broadcasts drawing changes via Supabase channel
-// Uses useEditor() hook (must be child of <Tldraw>)
-// ============================================
+const SKIP_TYPES = new Set([
+  'camera', 'instance', 'instance_page_state', 'pointer', 'instance_presence'
+])
+
+function isContentRecord(r) {
+  return r && r.typeName && !SKIP_TYPES.has(r.typeName)
+}
+
+const SYNC_BATCH_MS = 50
+
 function RealtimeSync({ boardId, userId, enabled }) {
   const editor = useEditor()
   const channelRef = useRef(null)
   const isSyncingRef = useRef(false)
   const saveTimeoutRef = useRef(null)
+  const pendingRef = useRef(null)
+  const batchTimerRef = useRef(null)
 
   useEffect(() => {
     if (!editor || !boardId || !enabled) return
@@ -530,7 +395,6 @@ function RealtimeSync({ boardId, userId, enabled }) {
     const channel = supabase.channel(`sync:${boardId}`)
     channelRef.current = channel
 
-    // Listen to remote drawing changes
     channel
       .on('broadcast', { event: 'draw' }, ({ payload }) => {
         if (isSyncingRef.current || payload.senderId === userId) return
@@ -540,93 +404,98 @@ function RealtimeSync({ boardId, userId, enabled }) {
           const { added, updated, removed } = payload
 
           editor.store.mergeRemoteChanges(() => {
-            if (added && added.length > 0) {
-              // Create clean records without store-specific metadata
-              const cleanRecords = added.map(r => ({ ...r }))
-              editor.store.put(cleanRecords)
+            const toPut = [
+              ...(added || []),
+              ...(updated || [])
+            ].filter(r => r && r.id && r.typeName)
+            for (const record of toPut) {
+              try { editor.store.put([record]) } catch {}
             }
-            if (updated && updated.length > 0) {
-              const cleanRecords = updated.map(r => ({ ...r }))
-              editor.store.put(cleanRecords)
-            }
-            if (removed && removed.length > 0) {
-              const ids = removed.map(r => r.id)
-              editor.store.remove(ids)
+            if (removed?.length > 0) {
+              const ids = removed.map(r => r.id).filter(Boolean)
+              if (ids.length > 0) {
+                try { editor.store.remove(ids) } catch {}
+              }
             }
           })
-
-          console.log('[Sync] Applied remote changes')
         } catch (error) {
           console.error('[Sync] Apply error:', error)
         } finally {
-          setTimeout(() => { isSyncingRef.current = false }, 100)
+          isSyncingRef.current = false
         }
       })
       .subscribe()
 
-    // Listen to local changes and broadcast them
+    function flushBatch() {
+      batchTimerRef.current = null
+      const batch = pendingRef.current
+      if (!batch) return
+      pendingRef.current = null
+
+      if (batch.added.length === 0 && batch.updated.length === 0 && batch.removed.length === 0) return
+
+      channel.send({
+        type: 'broadcast',
+        event: 'draw',
+        payload: { senderId: userId, added: batch.added, updated: batch.updated, removed: batch.removed }
+      })
+    }
+
+    function mergeToBatch(changes) {
+      if (!pendingRef.current) {
+        pendingRef.current = { addedMap: {}, updatedMap: {}, removedSet: new Set(), added: [], updated: [], removed: [] }
+      }
+      const p = pendingRef.current
+
+      if (changes.added) {
+        for (const record of Object.values(changes.added)) {
+          if (!isContentRecord(record)) continue
+          p.removedSet.delete(record.id)
+          delete p.updatedMap[record.id]
+          p.addedMap[record.id] = { ...record }
+        }
+      }
+      if (changes.updated) {
+        for (const [, to] of Object.values(changes.updated)) {
+          if (!isContentRecord(to)) continue
+          if (p.addedMap[to.id]) {
+            p.addedMap[to.id] = { ...to }
+          } else {
+            p.updatedMap[to.id] = { ...to }
+          }
+        }
+      }
+      if (changes.removed) {
+        for (const record of Object.values(changes.removed)) {
+          if (!isContentRecord(record)) continue
+          if (p.addedMap[record.id]) {
+            delete p.addedMap[record.id]
+          } else {
+            delete p.updatedMap[record.id]
+            p.removedSet.add(record.id)
+          }
+        }
+      }
+
+      p.added = Object.values(p.addedMap)
+      p.updated = Object.values(p.updatedMap)
+      p.removed = [...p.removedSet].map(id => ({ id }))
+    }
+
     const unsubscribe = editor.store.listen((entry) => {
-      // IMPORTANT: Only process user-originated changes
-      // This prevents infinite loops from mergeRemoteChanges triggering this listener
       if (isSyncingRef.current) return
       if (entry.source !== 'user') return
 
-      try {
-        const changes = entry.changes
-        const added = []
-        const updated = []
-        const removed = []
+      mergeToBatch(entry.changes)
 
-        // Collect only drawing content (not camera/viewport)
-        if (changes.added) {
-          Object.values(changes.added).forEach(record => {
-            if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
-              added.push({ ...record }) // Clone to avoid reference issues
-            }
-          })
-        }
-
-        if (changes.updated) {
-          Object.values(changes.updated).forEach(([_from, to]) => {
-            if (to.typeName !== 'camera' && to.typeName !== 'instance' && to.typeName !== 'instance_page_state') {
-              updated.push({ ...to }) // Clone
-            }
-          })
-        }
-
-        if (changes.removed) {
-          Object.values(changes.removed).forEach(record => {
-            if (record.typeName !== 'camera' && record.typeName !== 'instance' && record.typeName !== 'instance_page_state') {
-              removed.push({ ...record }) // Clone
-            }
-          })
-        }
-
-        // Only broadcast if there are actual drawing changes
-        const hasChanges = added.length > 0 || updated.length > 0 || removed.length > 0
-        if (hasChanges) {
-          channel.send({
-            type: 'broadcast',
-            event: 'draw',
-            payload: { senderId: userId, added, updated, removed }
-          })
-        }
-      } catch (error) {
-        console.error('[Sync] Broadcast error:', error)
+      if (batchTimerRef.current === null) {
+        batchTimerRef.current = setTimeout(flushBatch, SYNC_BATCH_MS)
       }
 
-      // Auto-save to database (debounced 2s)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       saveTimeoutRef.current = setTimeout(async () => {
         try {
-          const allRecords = editor.store.allRecords()
-          const snapshot = {
-            store: Object.fromEntries(
-              allRecords.map(record => [record.id, { ...record }]) // Deep clone for serialization
-            ),
-            schema: { schemaVersion: 2, sequences: {} }
-          }
-
+          const snapshot = editor.store.getSnapshot()
           const { error } = await supabase
             .from('boards')
             .update({
@@ -636,15 +505,18 @@ function RealtimeSync({ boardId, userId, enabled }) {
             .eq('id', boardId)
 
           if (error) throw error
-          console.log('[Sync] ✅ Auto-saved')
         } catch (error) {
           console.error('[Sync] Auto-save error:', error)
         }
-      }, 2000)
+      }, 3000)
     }, { source: 'user', scope: 'all' })
 
     return () => {
       unsubscribe()
+      if (batchTimerRef.current !== null) {
+        clearTimeout(batchTimerRef.current)
+        flushBatch()
+      }
       supabase.removeChannel(channel)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
@@ -653,15 +525,16 @@ function RealtimeSync({ boardId, userId, enabled }) {
   return null
 }
 
-// ============================================
-// LiveCursors — Broadcasts and renders remote cursors
-// Uses Supabase Presence in PAGE coordinates (zoom/pan independent)
-// ============================================
+const CURSOR_THROTTLE_MS = 100
+const CURSOR_MOVE_THRESHOLD = 2
+
 const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
   const editor = useEditor()
   const [peers, setPeers] = useState({})
+  const peersRef = useRef({})
   const channelRef = useRef(null)
-  const lastSentRef = useRef(0)
+  const lastSentRef = useRef({ time: 0, x: 0, y: 0 })
+  const rafRef = useRef(null)
 
   useEffect(() => {
     if (!editor || !boardId || !userId) return
@@ -672,19 +545,62 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
     })
     channelRef.current = channel
 
-    // Listen for presence sync (cursor positions from other users)
+    function schedulePeersUpdate() {
+      if (rafRef.current !== null) return
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
+        setPeers({ ...peersRef.current })
+      })
+    }
+
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
-        const peerData = {}
+        const activeIds = new Set()
+        let changed = false
+        const next = { ...peersRef.current }
+
         Object.values(state).forEach(presences => {
           presences.forEach(presence => {
-            if (presence.id !== userId) {
-              peerData[presence.id] = presence
+            if (presence.id === userId) return
+            activeIds.add(presence.id)
+            const existing = next[presence.id]
+            if (!existing || existing.email !== presence.email || existing.color !== presence.color) {
+              next[presence.id] = {
+                ...existing,
+                id: presence.id,
+                email: presence.email,
+                color: presence.color,
+                cx: existing?.cx ?? null,
+                cy: existing?.cy ?? null
+              }
+              changed = true
             }
           })
         })
-        setPeers(peerData)
+
+        for (const id of Object.keys(next)) {
+          if (!activeIds.has(id)) {
+            delete next[id]
+            changed = true
+          }
+        }
+
+        if (changed) {
+          peersRef.current = next
+          schedulePeersUpdate()
+        }
+      })
+      .on('broadcast', { event: 'cursor-move' }, ({ payload }) => {
+        if (!payload || payload.id === userId) return
+        const existing = peersRef.current[payload.id]
+        if (!existing) return
+
+        peersRef.current = {
+          ...peersRef.current,
+          [payload.id]: { ...existing, cx: payload.cx, cy: payload.cy }
+        }
+        schedulePeersUpdate()
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -692,35 +608,37 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
             id: userId,
             email: userEmail,
             color: userColor,
-            cx: null,
-            cy: null,
           })
         }
       })
 
-    // Track mouse movement and send to channel (throttled 50ms)
     const handlePointerMove = () => {
       const now = Date.now()
-      if (now - lastSentRef.current < 50) return
-      lastSentRef.current = now
+      const last = lastSentRef.current
+      if (now - last.time < CURSOR_THROTTLE_MS) return
 
       try {
         const pagePoint = editor.inputs.currentPagePoint
         if (!pagePoint) return
 
-        channel.track({
-          id: userId,
-          email: userEmail,
-          color: userColor,
-          cx: Math.round(pagePoint.x * 10) / 10,
-          cy: Math.round(pagePoint.y * 10) / 10,
+        const cx = Math.round(pagePoint.x)
+        const cy = Math.round(pagePoint.y)
+
+        if (Math.abs(cx - last.x) < CURSOR_MOVE_THRESHOLD &&
+            Math.abs(cy - last.y) < CURSOR_MOVE_THRESHOLD) return
+
+        lastSentRef.current = { time: now, x: cx, y: cy }
+
+        channel.send({
+          type: 'broadcast',
+          event: 'cursor-move',
+          payload: { id: userId, cx, cy }
         })
       } catch (e) {
         // silent
       }
     }
 
-    // Use the tldraw container element to listen for pointer moves
     const container = editor.getContainer()
     if (container) {
       container.addEventListener('pointermove', handlePointerMove)
@@ -730,13 +648,15 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
       if (container) {
         container.removeEventListener('pointermove', handlePointerMove)
       }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
       supabase.removeChannel(channel)
     }
   }, [editor, boardId, userId, userEmail])
 
   if (!editor) return null
 
-  // Convert each peer's PAGE coordinates → screen coordinates using local camera
   const camera = editor.getCamera()
 
   return (
@@ -744,7 +664,6 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
       {Object.values(peers).map(peer => {
         if (peer.cx == null || peer.cy == null) return null
 
-        // Page coords → screen coords: screenX = (pageX + camera.x) * camera.z
         const screenX = (peer.cx + camera.x) * camera.z
         const screenY = (peer.cy + camera.y) * camera.z
 
@@ -762,9 +681,6 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
   )
 })
 
-// ============================================
-// PeerCursor — Figma-style arrow + name pill
-// ============================================
 function PeerCursor({ email, color, x, y }) {
   const displayName = email
     ? (email.includes('@') ? email.split('@')[0] : email)
@@ -781,42 +697,36 @@ function PeerCursor({ email, color, x, y }) {
       willChange: 'transform',
       transition: 'transform 80ms linear'
     }}>
-      {/* Figma-style cursor arrow */}
       <svg
-        width="18"
-        height="22"
-        viewBox="0 0 18 22"
+        width="16"
+        height="20"
+        viewBox="0 0 16 20"
         fill="none"
-        style={{
-          display: 'block',
-          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))'
-        }}
+        style={{ display: 'block', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}
       >
         <path
-          d="M0.5 0.5L17 11L9.5 12.5L5 21L0.5 0.5Z"
+          d="M0.5 0.5L14.5 10L8 11.5L4 19L0.5 0.5Z"
           fill={color}
-          stroke="white"
-          strokeWidth="1.2"
+          stroke="rgba(255,255,255,0.9)"
+          strokeWidth="1"
           strokeLinejoin="round"
         />
       </svg>
 
-      {/* Name pill — positioned below-right of cursor arrow */}
       <div style={{
         position: 'absolute',
-        left: 14,
-        top: 20,
+        left: 12,
+        top: 18,
         background: color,
         color: '#fff',
-        padding: '2px 8px',
-        borderRadius: 4,
-        fontSize: 11,
+        padding: '1px 6px',
+        borderRadius: 3,
+        fontSize: 10,
         fontWeight: 600,
         whiteSpace: 'nowrap',
-        lineHeight: '16px',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-        letterSpacing: '0.01em',
-        maxWidth: 120,
+        lineHeight: '15px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        maxWidth: 100,
         overflow: 'hidden',
         textOverflow: 'ellipsis'
       }}>
@@ -826,41 +736,19 @@ function PeerCursor({ email, color, x, y }) {
   )
 }
 
-// ============================================
-// ReadOnlyOverlay — Shows "view only" badge
-// ============================================
 function ReadOnlyOverlay() {
   return (
-    <div style={{
-      position: 'absolute',
-      bottom: 20,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      padding: '8px 16px',
-      background: 'rgba(251, 191, 36, 0.15)',
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
-      border: '1px solid rgba(251, 191, 36, 0.3)',
-      borderRadius: 8,
-      color: '#fbbf24',
-      fontSize: 12,
-      fontWeight: 600,
-      pointerEvents: 'none',
-      zIndex: 1000
-    }}>
-      👀 View-only mode • You cannot edit this board
+    <div className="board-readonly-banner">
+      View-only mode
     </div>
   )
 }
 
-// ============================================
-// Helper: Generate consistent color per user
-// ============================================
 function getColorForUser(userId) {
   const colors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
-    '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
-    '#F8B739', '#52B788', '#E07A5F', '#3D5A80'
+    '#e06c75', '#56b6c2', '#61afef', '#e5c07b',
+    '#98c379', '#c678dd', '#d19a66', '#be5046',
+    '#7ec699', '#82aaff', '#c792ea', '#f78c6c'
   ]
   let hash = 0
   for (let i = 0; i < userId.length; i++) {
