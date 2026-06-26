@@ -741,6 +741,9 @@ html, body {
 .board-canvas-wrap {
   flex: 1;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .board-readonly-banner {
