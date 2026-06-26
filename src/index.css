@@ -588,7 +588,8 @@ html, body {
 /* Ensure tldraw container fills available space */
 .tldraw,
 .tl-container {
-  position: relative !important;
+  position: absolute !important;
+  inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
   overflow: hidden !important;
