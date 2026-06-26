@@ -273,6 +273,7 @@ export default function Board() {
 function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   const [initialSnapshot, setInitialSnapshot] = useState(undefined)
   const [isLoading, setIsLoading] = useState(true)
+  const editorRef = useRef(null)
 
   useEffect(() => {
     if (!boardId) return
@@ -301,6 +302,57 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
     loadSavedState()
   }, [boardId])
 
+  // Global keyboard shortcuts interceptor
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (!editorRef.current) return
+
+      const activeEl = document.activeElement
+      const isInput = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable
+      )
+
+      if (isInput) return
+
+      // Don't intercept if modifier keys are pressed
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      const key = e.key.toLowerCase()
+      let matched = false
+
+      if (key === 'h') {
+        editorRef.current.setCurrentTool('hand')
+        matched = true
+      } else if (key === 'v') {
+        editorRef.current.setCurrentTool('select')
+        matched = true
+      } else if (key === 'd' || key === 'p') {
+        editorRef.current.setCurrentTool('draw')
+        matched = true
+      } else if (key === 'e') {
+        editorRef.current.setCurrentTool('eraser')
+        matched = true
+      } else if (key === 't') {
+        editorRef.current.setCurrentTool('text')
+        matched = true
+      } else if (key === 'n') {
+        editorRef.current.setCurrentTool('note')
+        matched = true
+      }
+
+      if (matched) {
+        editorRef.current.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [])
+
   if (isLoading) {
     return (
       <div style={{
@@ -325,11 +377,21 @@ const assetUrls = getAssetUrls({
 })
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div
+      style={{ width: '100%', height: '100%' }}
+      onPointerDown={() => {
+        if (editorRef.current) {
+          editorRef.current.focus()
+        }
+      }}
+    >
       <Tldraw
         autoFocus
         assetUrls={assetUrls}
         onMount={(editor) => {
+          editorRef.current = editor
+          editor.focus()
+
           if (initialSnapshot) {
             let loaded = false
             if (initialSnapshot.store && initialSnapshot.schema) {
