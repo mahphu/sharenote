@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Tldraw, useEditor, track } from 'tldraw'
+import { getAssetUrls } from '@tldraw/assets/selfHosted'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import ChatSidebar from '../components/ChatSidebar'
@@ -319,10 +320,15 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
     )
   }
 
+const assetUrls = getAssetUrls({
+  baseUrl: '/tldraw-assets/'
+})
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Tldraw
         autoFocus
+        assetUrls={assetUrls}
         onMount={(editor) => {
           if (initialSnapshot) {
             let loaded = false
