@@ -1,136 +1,68 @@
-# Sharenote
+# 🎨 Sharenote
 
-A real-time collaborative whiteboard application built with React, Tldraw, and Supabase. Draw, collaborate, and chat with your team in real-time.
+> A premium real-time collaborative whiteboard and notes application built with React, Tldraw, and Supabase.
 
-![Sharenote Banner](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Sharenote+-+Real-time+Collaborative+Whiteboard)
+🌐 **Languages:** [English (Active)](README.md) | [Tiếng Việt](README.vi.md) | [日本語](README.ja.md)
+
+---
+
+## 📊 Overview
+
+Sharenote is an interactive whiteboard platform designed for high-performance team collaboration. Users can draw, collaborate on a shared infinite canvas, track live cursor presence, and communicate instantly through a real-time chat interface.
+
+### 🛠 Tech Stack
+
+![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![Tldraw v2](https://img.shields.io/badge/Tldraw-v2.4.6-black?style=flat-square)
+![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-Bundler-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Yjs](https://img.shields.io/badge/Yjs-CRDT-FFCD00?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+
+---
 
 ## ✨ Features
 
-- **Real-time Drawing Sync** — Changes broadcast instantly via Supabase Realtime, with optimized batching to reduce network overhead
-- **Live Cursors** — See collaborators' cursor positions in real-time with color-coded labels
-- **Real-time Chat** — Built-in chat sidebar for team communication
-- **Google OAuth** — Secure authentication via Supabase Auth
-- **Dark Theme** — Modern, eye-friendly dark interface
-- **Persistent Storage** — Auto-save canvas state to Supabase PostgreSQL
-- **Multi-user Presence** — Track who's online in each board
+*   **⚡ Real-time Drawing Sync:** Collaborative drawing updates instantly via Supabase Realtime, utilizing smart batching to keep network overhead low.
+*   **👥 Live Cursors:** View active collaborators' cursor movements in real-time with color-coded tags and names.
+*   **💬 Real-time Chat:** Sidebar messaging built on Supabase `postgres_changes` subscription.
+*   **🔒 Secure Auth:** Seamless login integrations with Google OAuth.
+*   **🌌 Premium Dark Theme:** Glassmorphism design system utilizing sleek, custom CSS variables.
+*   **💾 Auto-Save Canvas:** Auto-saves board snapshots to PostgreSQL Database.
+*   **📶 Multi-User Presence:** Sidebar indicators show who is online.
 
-## 🛠 Tech Stack
-
-- **Frontend**: React 19, Vite, React Router
-- **Whiteboard**: [Tldraw v2](https://tldraw.dev/) — Infinite canvas with full drawing toolkit
-- **Backend**: Supabase (PostgreSQL + Realtime + Auth)
-- **Styling**: CSS custom properties, dark theme design
+---
 
 ## 🏗 Architecture Highlights
 
-### Performance Optimizations
+### ⚡ Performance & Quota Optimization
 
-**Drawing Sync (Board.jsx — RealtimeSync)**
-- **50ms batching window**: Multiple rapid store changes are merged into a single broadcast
-- **Smart deduplication**: Records updated multiple times within the batch send only their final state
-- **Cancellation logic**: Add-then-remove operations within the same batch produce zero network traffic
-- **Result**: Reduced broadcast frequency from ~30/sec to ~20/sec max during active drawing
+To maintain high performance and low server billings/quotas, we optimized the data synchronization loops:
 
-**Cursor Tracking (Board.jsx — LiveCursors)**
-- **Broadcast over Presence**: Switched from `channel.track()` (expensive state updates) to `channel.send()` (lightweight broadcasts) for cursor positions
-- **100ms throttle + 2px dead-zone**: Filters micro-movements and reduces cursor events by ~40%
-- **RAF-batched React updates**: Coalesces multiple peer cursor updates into a single render per frame
-- **Result**: Smoother remote cursors, significantly lower Supabase quota consumption
+| Component | Optimization | Detail |
+| :--- | :--- | :--- |
+| **Drawing Sync (`RealtimeSync`)** | 50ms Batching Window | Merges multiple rapid store changes into a single payload. |
+| | Smart Deduplication | Keeps only the final state if a shape is updated multiple times within 50ms. |
+| | Add-Then-Remove Cancellation | Produces zero network events if a drawing is deleted within the same batch. |
+| **Cursor Tracking (`LiveCursors`)** | Broadcast over Presence | Uses lightweight `channel.send()` broadcasts instead of heavy Presence database tracks. |
+| | 100ms Throttle + 2px Dead-zone | Ignores micro-movements, filtering cursor updates by **~40%**. |
+| | RAF-batched React Renders | Coalesces multiple peer updates into a single render frame using `requestAnimationFrame`. |
 
-## 📦 Installation
+### 📦 Assets Self-Hosting
 
-### Prerequisites
+*   **Solution:** All Tldraw static assets (fonts, icons, translations) are self-hosted in `public/tldraw-assets/` using the `@tldraw/assets` library helper.
+*   **Result:** Works **100% offline** and is **immune to CDN timeouts/blocks** (especially in Vietnam) or Content Security Policy (CSP) header conflicts on Vercel.
 
-- Node.js 18+
-- Supabase account ([sign up free](https://supabase.com))
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/sharenote.git
-cd sharenote
-```
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Configure Environment
-
-Create a `.env` file in the project root:
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-
-Get your Supabase credentials from: **Dashboard → Settings → API**
-
-### 4. Set Up Database
-
-Run the SQL scripts in order:
-
-```bash
-# 1. Core tables and RLS policies
-psql -h <host> -U postgres -d postgres -f docs/sql/complete_database_setup.sql
-
-# 2. Realtime setup
-psql -h <host> -U postgres -d postgres -f docs/sql/supabase_realtime_setup.sql
-
-# 3. Share feature tables
-psql -h <host> -U postgres -d postgres -f docs/sql/share_feature_setup.sql
-```
-
-Or run them directly in the Supabase SQL Editor.
-
-### 5. Configure Google OAuth
-
-1. Go to **Supabase Dashboard → Authentication → Providers**
-2. Enable **Google** provider
-3. Add your OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-4. Add authorized redirect URI: `https://your-project.supabase.co/auth/v1/callback`
-
-### 6. Start Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173)
-
-## 🚀 Deployment
-
-### Build for Production
-
-```bash
-npm run build
-```
-
-The optimized bundle will be in the `dist/` folder.
-
-### Deploy to Vercel
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/sharenote)
-
-Or manually:
-
-```bash
-npm i -g vercel
-vercel --prod
-```
-
-**Important**: Add your environment variables in Vercel's project settings.
+---
 
 ## 📁 Project Structure
 
-```
+```text
 sharenote/
 ├── src/
 │   ├── components/
 │   │   ├── ChatSidebar.jsx          # Real-time chat UI
-│   │   ├── ShareModal.jsx           # Board sharing modal
+│   │   ├── ShareModal.jsx           # Board sharing modal (Vanilla CSS + Soft UI)
 │   │   └── OnlineUsersSidebar.jsx   # Active users list
 │   ├── pages/
 │   │   ├── Home.jsx                 # Dashboard (board list)
@@ -138,59 +70,64 @@ sharenote/
 │   ├── App.jsx                      # Router + auth guard
 │   ├── main.jsx                     # App entry point
 │   ├── supabaseClient.js            # Supabase connection
-│   └── index.css                    # Global styles + dark theme
-├── docs/
-│   └── sql/                         # Database setup scripts
+│   └── index.css                    # Design System + dark theme variables
 ├── public/
-│   ├── favicon.svg
-│   └── icons.svg
-├── .env.example                     # Environment template
-└── vercel.json                      # SPA routing config
+│   └── tldraw-assets/               # Self-hosted fonts, icons, translations
+├── vercel.json                      # Vercel SPA routing
+└── package.json                     # Dependencies config
 ```
-
-## 🎨 Key Components
-
-### Board.jsx
-
-The main canvas component with two inline real-time sub-components:
-
-- **RealtimeSync**: Handles drawing synchronization with optimized batching
-- **LiveCursors**: Manages peer cursor positions via lightweight broadcasts
-
-### ChatSidebar.jsx
-
-Real-time chat powered by Supabase `postgres_changes` subscription. Messages sync instantly across all users in the same board.
-
-### ShareModal.jsx
-
-Board sharing interface (prepared for future collaboration features).
-
-## 🔒 Security
-
-- **Row Level Security (RLS)** enabled on all tables
-- Users can only access boards they own or have been shared with
-- Google OAuth handles authentication
-- Environment variables keep credentials secure
-- `.env` excluded from version control
-
-## 🧪 Testing
-
-Open the app in two browser windows:
-
-1. **Drawing sync**: Draw in one window → appears instantly in the other
-2. **Live cursors**: Move mouse in one window → cursor with email appears in the other
-3. **Chat**: Send message in one window → appears in the other immediately
-
-## 📝 License
-
-MIT License - feel free to use this project for learning or building your own collaborative tools.
-
-## 🙏 Acknowledgments
-
-- [Tldraw](https://tldraw.dev/) for the excellent infinite canvas library
-- [Supabase](https://supabase.com/) for the real-time backend infrastructure
-- [React](https://react.dev/) for the UI framework
 
 ---
 
-**Built with ❤️ for seamless real-time collaboration**
+## 📦 Installation & Setup
+
+### Prerequisites
+*   Node.js 18+
+*   Supabase Account
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/yourusername/sharenote.git
+cd sharenote
+npm install --legacy-peer-deps
+```
+
+### 2. Configure Environment
+Create a `.env` file in the project root:
+```env
+VITE_SUPABASE_URL=https://your-project-url.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. Run Database Setup
+Execute the SQL files inside your Supabase SQL editor:
+1.  `docs/sql/complete_database_setup.sql` (Core tables)
+2.  `docs/sql/supabase_realtime_setup.sql` (Realtime publication)
+3.  `docs/sql/share_feature_setup.sql` (Sharing rules)
+
+### 4. Start Development
+```bash
+npm run dev
+```
+
+---
+
+## 🚀 Deployment
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Deploy to Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/sharenote)
+
+---
+
+## 📝 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+**Built with ❤️ for high-performance real-time collaboration**
