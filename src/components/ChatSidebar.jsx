@@ -125,11 +125,13 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
     }
   }
 
-  // Handle Enter key
+  // Handle key events in chat input
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage(e)
+    } else if (e.key === 'Escape') {
+      e.target.blur() // Unfocus chat input to restore whiteboard keyboard shortcuts
     }
   }
 
