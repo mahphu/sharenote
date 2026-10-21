@@ -39,3 +39,6 @@ taste-skill/
 
 # Local images
 passaway.png
+
+# Local SQLite database
+server/data/

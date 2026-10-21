@@ -227,26 +227,71 @@ html, body {
   transform: scale(0.97);
 }
 
-/* Google Login */
-.btn-google {
+/* Email/password login */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.login-input {
   width: 100%;
+  padding: 13px 16px;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.login-input::placeholder {
+  color: var(--text-muted);
+}
+
+.login-input:focus {
+  border-color: var(--accent-solid);
+  background: var(--bg-card-hover);
+}
+
+.login-error {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 4px;
   padding: 14px 24px;
   font-size: 15px;
-  background: #fff;
-  color: #1f1f1f;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
 }
 
-.btn-google:hover {
-  background: #f5f5f5;
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
-.btn-google img {
-  width: 20px;
-  height: 20px;
+.login-switch {
+  margin-top: 20px;
+  padding: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.login-switch:hover {
+  color: var(--accent-solid);
 }
 
 /* Primary (Create) */

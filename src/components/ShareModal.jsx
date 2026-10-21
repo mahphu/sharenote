@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabaseClient'
+import { api } from '../api'
 
 const ACCESS_OPTIONS = [
   { value: 'restricted', label: 'Private', desc: 'Only you can access' },
@@ -18,25 +18,22 @@ export default function ShareModal({ boardId, ownerId, currentUserId, slug, onCl
   const activeOption = ACCESS_OPTIONS.find(o => o.value === publicAccess)
 
   useEffect(() => {
-    supabase
-      .from('boards')
-      .select('public_access')
-      .eq('id', boardId)
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) setPublicAccess(data.public_access || 'restricted')
-        setLoading(false)
-      })
-  }, [boardId])
+    api(`/boards/by-slug/${encodeURIComponent(slug)}`)
+      .then(({ board }) => setPublicAccess(board.public_access || 'restricted'))
+      .catch((error) => console.error('[Share] Load error:', error))
+      .finally(() => setLoading(false))
+  }, [slug])
 
   const handleAccessChange = async (value) => {
     if (!isOwner || saving) return
     setSaving(true)
-    const { error } = await supabase
-      .from('boards')
-      .update({ public_access: value })
-      .eq('id', boardId)
-    if (!error) setPublicAccess(value)
+    try {
+      await api(`/boards/${boardId}`, { method: 'PATCH', body: { public_access: value } })
+      setPublicAccess(value)
+    } catch (error) {
+      console.error('[Share] Update error:', error)
+      alert('Failed to update access: ' + error.message)
+    }
     setSaving(false)
   }
 

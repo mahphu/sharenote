@@ -1,17 +1,21 @@
 // ============================================
 // SHARENOTE — ChatSidebar Component
-// Real-time chat using Supabase Postgres Changes
+// Real-time chat: history over REST, new messages over the board WebSocket
 // ============================================
 
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '../supabaseClient'
+import { api } from '../api'
+import { acquireBoardSocket } from '../realtime'
 
-export default function ChatSidebar({ boardId, userId, userEmail }) {
+function appendUnique(messages, message) {
+  return messages.some(m => m.id === message.id) ? messages : [...messages, message]
+}
+
+export default function ChatSidebar({ boardId, userId }) {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef(null)
-  const channelRef = useRef(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -21,22 +25,8 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
   useEffect(() => {
     async function loadMessages() {
       try {
-        const { data, error } = await supabase
-          .from('messages')
-          .select(`
-            id,
-            content,
-            created_at,
-            sender_id,
-            profiles:sender_id (email)
-          `)
-          .eq('board_id', boardId)
-          .order('created_at', { ascending: true })
-          .limit(100)
-
-        if (error) throw error
-
-        setMessages(data || [])
+        const { messages } = await api(`/boards/${boardId}/messages`)
+        setMessages(messages)
         setLoading(false)
         setTimeout(scrollToBottom, 100)
       } catch (error) {
@@ -50,47 +40,19 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
     }
   }, [boardId])
 
-  // Subscribe to real-time messages using Postgres Changes
+  // Subscribe to new messages pushed by the server
   useEffect(() => {
     if (!boardId) return
 
-    const channel = supabase
-      .channel(`messages:${boardId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `board_id=eq.${boardId}`
-        },
-        async (payload) => {
-          try {
-            // Fetch sender profile for new message
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', payload.new.sender_id)
-              .single()
-
-            const newMsg = {
-              ...payload.new,
-              profiles: profile
-            }
-
-            setMessages(prev => [...prev, newMsg])
-            setTimeout(scrollToBottom, 100)
-          } catch (error) {
-            console.error('[Chat] Profile fetch error:', error)
-          }
-        }
-      )
-      .subscribe()
-
-    channelRef.current = channel
+    const socket = acquireBoardSocket(boardId)
+    const offChat = socket.on('chat', ({ message }) => {
+      setMessages(prev => appendUnique(prev, message))
+      setTimeout(scrollToBottom, 100)
+    })
 
     return () => {
-      supabase.removeChannel(channel)
+      offChat()
+      socket.release()
     }
   }, [boardId])
 
@@ -108,15 +70,12 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
     }
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .insert([{
-          board_id: boardId,
-          sender_id: userId,
-          content: trimmed
-        }])
-
-      if (error) throw error
+      const { message } = await api(`/boards/${boardId}/messages`, {
+        method: 'POST',
+        body: { content: trimmed }
+      })
+      setMessages(prev => appendUnique(prev, message))
+      setTimeout(scrollToBottom, 100)
 
       setNewMessage('')
     } catch (error) {
@@ -207,7 +166,7 @@ export default function ChatSidebar({ boardId, userId, userEmail }) {
                   paddingLeft: isOwn ? 0 : 8,
                   paddingRight: isOwn ? 8 : 0
                 }}>
-                  {msg.profiles?.email?.split('@')[0] || 'Unknown'}
+                  {msg.sender_email?.split('@')[0] || 'Unknown'}
                 </div>
                 <div
                   ref={(el) => {

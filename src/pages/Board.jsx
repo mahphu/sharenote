@@ -1,8 +1,9 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Tldraw, useEditor, track } from 'tldraw'
 import { getAssetUrls } from '@tldraw/assets/selfHosted'
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { supabase } from '../supabaseClient'
+import { useEffect, useState, useRef } from 'react'
+import { api } from '../api'
+import { acquireBoardSocket } from '../realtime'
 import ChatSidebar from '../components/ChatSidebar'
 import ShareModal from '../components/ShareModal'
 import OnlineUsersSidebar from '../components/OnlineUsersSidebar'
@@ -49,11 +50,10 @@ function IconUsers() {
   )
 }
 
-export default function Board() {
+export default function Board({ user }) {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const [userId, setUserId] = useState(null)
-  const [userEmail, setUserEmail] = useState(null)
+  const userId = user.id
   const [boardId, setBoardId] = useState(null)
   const [ownerId, setOwnerId] = useState(null)
   const [publicAccess, setPublicAccess] = useState('restricted')
@@ -62,80 +62,68 @@ export default function Board() {
   const [usersOpen, setUsersOpen] = useState(true)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const deletingRef = useRef(false)
 
   const isOwner = userId && ownerId && userId === ownerId
   const isReadOnly = !isOwner && publicAccess === 'viewer'
 
   useEffect(() => {
+    let cancelled = false
+
     async function init() {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError || !user) {
-          alert('Authentication error. Please log in again.')
-          return
-        }
-        setUserId(user.id)
-        setUserEmail(user.email || 'Anonymous')
-
-        const { data: board, error: boardError } = await supabase
-          .from('boards')
-          .select('id, owner_id, public_access')
-          .eq('unique_slug', slug)
-          .maybeSingle()
-
-        if (boardError) throw boardError
-
-        if (!board) {
-          alert(`Board "${slug}" not found.`)
-          navigate('/')
-          return
-        }
-
+        const { board } = await api(`/boards/by-slug/${encodeURIComponent(slug)}`)
+        if (cancelled) return
         setBoardId(board.id)
         setOwnerId(board.owner_id)
         setPublicAccess(board.public_access || 'restricted')
-
-        if (board.owner_id !== user.id && board.public_access === 'restricted') {
+      } catch (error) {
+        if (cancelled) return
+        if (error.status === 404) {
+          alert(`Board "${slug}" not found.`)
+          navigate('/')
+        } else if (error.status === 403) {
           alert('You do not have access to this board.')
           navigate('/')
-          return
+        } else {
+          console.error('[Board] Init error:', error)
+          alert('Failed to load board: ' + error.message)
         }
-      } catch (error) {
-        console.error('[Board] Init error:', error)
-        alert('Failed to load board: ' + error.message)
       }
     }
     init()
+
+    return () => { cancelled = true }
   }, [slug, navigate])
 
+  // Presence + access changes pushed by the server
   useEffect(() => {
-    if (!boardId || !userId || !userEmail) return
+    if (!boardId) return
 
-    const channel = supabase.channel(`users:${boardId}`, {
-      config: { presence: { key: userId } }
-    })
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        const users = new Map()
-        Object.values(state).forEach(presences => {
-          presences.forEach(presence => users.set(presence.id, presence))
-        })
-        setOnlineUsers(users)
+    const socket = acquireBoardSocket(boardId)
+    const unsubscribers = [
+      socket.on('presence', ({ users }) => {
+        setOnlineUsers(new Map(users.map(u => [u.id, u])))
+      }),
+      socket.on('access', ({ public_access }) => {
+        setPublicAccess(public_access)
+      }),
+      socket.on('forbidden', () => {
+        alert('You no longer have access to this board.')
+        navigate('/')
+      }),
+      socket.on('board-deleted', () => {
+        if (deletingRef.current) return
+        alert('This board was deleted by its owner.')
+        navigate('/')
       })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            id: userId,
-            email: userEmail,
-            online_at: new Date().toISOString()
-          })
-        }
-      })
+    ]
 
-    return () => supabase.removeChannel(channel)
-  }, [boardId, userId, userEmail])
+    return () => {
+      unsubscribers.forEach(off => off())
+      socket.release()
+    }
+  }, [boardId, navigate])
 
   const handleDeleteBoard = async () => {
     if (!isOwner) return
@@ -146,17 +134,14 @@ export default function Board() {
 
     try {
       setDeleting(true)
-      const { error } = await supabase
-        .from('boards')
-        .delete()
-        .eq('id', boardId)
-
-      if (error) throw error
+      deletingRef.current = true
+      await api(`/boards/${boardId}`, { method: 'DELETE' })
       alert('Board deleted successfully.')
       navigate('/')
     } catch (error) {
       console.error('[Board] Delete error:', error)
       alert('Failed to delete board: ' + error.message)
+      deletingRef.current = false
       setDeleting(false)
     }
   }
@@ -243,13 +228,12 @@ export default function Board() {
           <TldrawCanvas
             boardId={boardId}
             userId={userId}
-            userEmail={userEmail}
             isReadOnly={isReadOnly}
           />
         </div>
 
         {chatOpen && (
-          <ChatSidebar boardId={boardId} userId={userId} userEmail={userEmail} />
+          <ChatSidebar boardId={boardId} userId={userId} />
         )}
 
         {usersOpen && (
@@ -275,7 +259,7 @@ const assetUrls = getAssetUrls({
   baseUrl: '/tldraw-assets/'
 })
 
-function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
+function TldrawCanvas({ boardId, userId, isReadOnly }) {
   const [initialSnapshot, setInitialSnapshot] = useState(undefined)
   const [isLoading, setIsLoading] = useState(true)
   const editorRef = useRef(null)
@@ -285,17 +269,8 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
 
     async function loadSavedState() {
       try {
-        const { data, error } = await supabase
-          .from('boards')
-          .select('canvas_data')
-          .eq('id', boardId)
-          .single()
-
-        if (!error && data?.canvas_data) {
-          setInitialSnapshot(data.canvas_data)
-        } else {
-          setInitialSnapshot(null)
-        }
+        const { snapshot } = await api(`/boards/${boardId}/canvas`)
+        setInitialSnapshot(snapshot)
       } catch (err) {
         console.error('[Canvas] Load error:', err)
         setInitialSnapshot(null)
@@ -426,13 +401,11 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
       >
         <RealtimeSync
           boardId={boardId}
-          userId={userId}
           enabled={!isReadOnly}
         />
         <LiveCursors
           boardId={boardId}
           userId={userId}
-          userEmail={userEmail}
         />
         {isReadOnly && <ReadOnlyOverlay />}
       </Tldraw>
@@ -450,50 +423,54 @@ function isContentRecord(r) {
 
 const SYNC_BATCH_MS = 50
 
-function RealtimeSync({ boardId, userId, enabled }) {
+function RealtimeSync({ boardId, enabled }) {
   const editor = useEditor()
-  const channelRef = useRef(null)
   const isSyncingRef = useRef(false)
   const saveTimeoutRef = useRef(null)
   const pendingRef = useRef(null)
   const batchTimerRef = useRef(null)
 
   useEffect(() => {
-    if (!editor || !boardId || !enabled) return
+    if (!editor || !boardId) return
 
-    const channel = supabase.channel(`sync:${boardId}`)
-    channelRef.current = channel
+    const socket = acquireBoardSocket(boardId)
 
-    channel
-      .on('broadcast', { event: 'draw' }, ({ payload }) => {
-        if (isSyncingRef.current || payload.senderId === userId) return
+    // Viewers still receive live edits; only editors send and save them
+    const offDraw = socket.on('draw', (payload) => {
+      if (isSyncingRef.current) return
 
-        try {
-          isSyncingRef.current = true
-          const { added, updated, removed } = payload
+      try {
+        isSyncingRef.current = true
+        const { added, updated, removed } = payload
 
-          editor.store.mergeRemoteChanges(() => {
-            const toPut = [
-              ...(added || []),
-              ...(updated || [])
-            ].filter(r => r && r.id && r.typeName)
-            for (const record of toPut) {
-              try { editor.store.put([record]) } catch {}
+        editor.store.mergeRemoteChanges(() => {
+          const toPut = [
+            ...(added || []),
+            ...(updated || [])
+          ].filter(r => r && r.id && r.typeName)
+          for (const record of toPut) {
+            try { editor.store.put([record]) } catch {}
+          }
+          if (removed?.length > 0) {
+            const ids = removed.map(r => r.id).filter(Boolean)
+            if (ids.length > 0) {
+              try { editor.store.remove(ids) } catch {}
             }
-            if (removed?.length > 0) {
-              const ids = removed.map(r => r.id).filter(Boolean)
-              if (ids.length > 0) {
-                try { editor.store.remove(ids) } catch {}
-              }
-            }
-          })
-        } catch (error) {
-          console.error('[Sync] Apply error:', error)
-        } finally {
-          isSyncingRef.current = false
-        }
-      })
-      .subscribe()
+          }
+        })
+      } catch (error) {
+        console.error('[Sync] Apply error:', error)
+      } finally {
+        isSyncingRef.current = false
+      }
+    })
+
+    if (!enabled) {
+      return () => {
+        offDraw()
+        socket.release()
+      }
+    }
 
     function flushBatch() {
       batchTimerRef.current = null
@@ -503,11 +480,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
 
       if (batch.added.length === 0 && batch.updated.length === 0 && batch.removed.length === 0) return
 
-      channel.send({
-        type: 'broadcast',
-        event: 'draw',
-        payload: { senderId: userId, added: batch.added, updated: batch.updated, removed: batch.removed }
-      })
+      socket.send('draw', { added: batch.added, updated: batch.updated, removed: batch.removed })
     }
 
     function mergeToBatch(changes) {
@@ -565,15 +538,7 @@ function RealtimeSync({ boardId, userId, enabled }) {
       saveTimeoutRef.current = setTimeout(async () => {
         try {
           const snapshot = editor.store.getSnapshot()
-          const { error } = await supabase
-            .from('boards')
-            .update({
-              canvas_data: snapshot,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', boardId)
-
-          if (error) throw error
+          await api(`/boards/${boardId}/canvas`, { method: 'PUT', body: { snapshot } })
         } catch (error) {
           console.error('[Sync] Auto-save error:', error)
         }
@@ -586,10 +551,11 @@ function RealtimeSync({ boardId, userId, enabled }) {
         clearTimeout(batchTimerRef.current)
         flushBatch()
       }
-      supabase.removeChannel(channel)
+      offDraw()
+      socket.release()
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
-  }, [editor, boardId, userId, enabled])
+  }, [editor, boardId, enabled])
 
   return null
 }
@@ -597,22 +563,17 @@ function RealtimeSync({ boardId, userId, enabled }) {
 const CURSOR_THROTTLE_MS = 100
 const CURSOR_MOVE_THRESHOLD = 2
 
-const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
+const LiveCursors = track(function LiveCursors({ boardId, userId }) {
   const editor = useEditor()
   const [peers, setPeers] = useState({})
   const peersRef = useRef({})
-  const channelRef = useRef(null)
   const lastSentRef = useRef({ time: 0, x: 0, y: 0 })
   const rafRef = useRef(null)
 
   useEffect(() => {
     if (!editor || !boardId || !userId) return
 
-    const userColor = getColorForUser(userId)
-    const channel = supabase.channel(`cursors:${boardId}`, {
-      config: { presence: { key: userId } }
-    })
-    channelRef.current = channel
+    const socket = acquireBoardSocket(boardId)
 
     function schedulePeersUpdate() {
       if (rafRef.current !== null) return
@@ -622,64 +583,52 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
       })
     }
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        const activeIds = new Set()
-        let changed = false
-        const next = { ...peersRef.current }
+    const offPresence = socket.on('presence', ({ users }) => {
+      const activeIds = new Set()
+      let changed = false
+      const next = { ...peersRef.current }
 
-        Object.values(state).forEach(presences => {
-          presences.forEach(presence => {
-            if (presence.id === userId) return
-            activeIds.add(presence.id)
-            const existing = next[presence.id]
-            if (!existing || existing.email !== presence.email || existing.color !== presence.color) {
-              next[presence.id] = {
-                ...existing,
-                id: presence.id,
-                email: presence.email,
-                color: presence.color,
-                cx: existing?.cx ?? null,
-                cy: existing?.cy ?? null
-              }
-              changed = true
-            }
-          })
-        })
-
-        for (const id of Object.keys(next)) {
-          if (!activeIds.has(id)) {
-            delete next[id]
-            changed = true
+      users.forEach(presence => {
+        if (presence.id === userId) return
+        activeIds.add(presence.id)
+        const existing = next[presence.id]
+        if (!existing || existing.email !== presence.email) {
+          next[presence.id] = {
+            ...existing,
+            id: presence.id,
+            email: presence.email,
+            color: getColorForUser(presence.id),
+            cx: existing?.cx ?? null,
+            cy: existing?.cy ?? null
           }
-        }
-
-        if (changed) {
-          peersRef.current = next
-          schedulePeersUpdate()
+          changed = true
         }
       })
-      .on('broadcast', { event: 'cursor-move' }, ({ payload }) => {
-        if (!payload || payload.id === userId) return
-        const existing = peersRef.current[payload.id]
-        if (!existing) return
 
-        peersRef.current = {
-          ...peersRef.current,
-          [payload.id]: { ...existing, cx: payload.cx, cy: payload.cy }
+      for (const id of Object.keys(next)) {
+        if (!activeIds.has(id)) {
+          delete next[id]
+          changed = true
         }
+      }
+
+      if (changed) {
+        peersRef.current = next
         schedulePeersUpdate()
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            id: userId,
-            email: userEmail,
-            color: userColor,
-          })
-        }
-      })
+      }
+    })
+
+    const offCursor = socket.on('cursor', (payload) => {
+      if (payload.id === userId) return
+      const existing = peersRef.current[payload.id]
+      if (!existing) return
+
+      peersRef.current = {
+        ...peersRef.current,
+        [payload.id]: { ...existing, cx: payload.cx, cy: payload.cy }
+      }
+      schedulePeersUpdate()
+    })
 
     const handlePointerMove = () => {
       const now = Date.now()
@@ -698,11 +647,7 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
 
         lastSentRef.current = { time: now, x: cx, y: cy }
 
-        channel.send({
-          type: 'broadcast',
-          event: 'cursor-move',
-          payload: { id: userId, cx, cy }
-        })
+        socket.send('cursor', { cx, cy })
       } catch (e) {
         // silent
       }
@@ -719,10 +664,13 @@ const LiveCursors = track(function LiveCursors({ boardId, userId, userEmail }) {
       }
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
       }
-      supabase.removeChannel(channel)
+      offPresence()
+      offCursor()
+      socket.release()
     }
-  }, [editor, boardId, userId, userEmail])
+  }, [editor, boardId, userId])
 
   if (!editor) return null
 

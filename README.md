@@ -1,6 +1,6 @@
 # 🎨 Sharenote
 
-> A premium real-time collaborative whiteboard and notes application built with React, Tldraw, and Supabase.
+> A premium real-time collaborative whiteboard and notes application built with React, Tldraw, and a self-hosted Node.js backend (WebSocket + SQLite).
 
 🌐 **Languages:** [English (Active)](README.md) | [Tiếng Việt](README.vi.md) | [日本語](README.ja.md)
 
@@ -14,7 +14,8 @@ Sharenote is an interactive whiteboard platform designed for high-performance te
 
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Tldraw v2](https://img.shields.io/badge/Tldraw-v2.4.6-black?style=flat-square)
-![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-24-339933?style=flat-square&logo=node.js&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-Bundler-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Yjs](https://img.shields.io/badge/Yjs-CRDT-FFCD00?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
@@ -23,12 +24,12 @@ Sharenote is an interactive whiteboard platform designed for high-performance te
 
 ## ✨ Features
 
-*   **⚡ Real-time Drawing Sync:** Collaborative drawing updates instantly via Supabase Realtime, utilizing smart batching to keep network overhead low.
+*   **⚡ Real-time Drawing Sync:** Collaborative drawing updates instantly over the built-in WebSocket server, utilizing smart batching to keep network overhead low.
 *   **👥 Live Cursors:** View active collaborators' cursor movements in real-time with color-coded tags and names.
-*   **💬 Real-time Chat:** Sidebar messaging built on Supabase `postgres_changes` subscription.
-*   **🔒 Secure Auth:** Seamless login integrations with Google OAuth.
+*   **💬 Real-time Chat:** Sidebar messaging stored in SQLite and pushed to everyone over WebSocket.
+*   **🔒 Secure Auth:** Email + password sign-up/sign-in (scrypt password hashing, HttpOnly session cookie).
 *   **🌌 Premium Dark Theme:** Glassmorphism design system utilizing sleek, custom CSS variables.
-*   **💾 Auto-Save Canvas:** Auto-saves board snapshots to PostgreSQL Database.
+*   **💾 Auto-Save Canvas:** Auto-saves board snapshots to the SQLite database.
 *   **📶 Multi-User Presence:** Sidebar indicators show who is online.
 
 ---
@@ -44,14 +45,14 @@ To maintain high performance and low server billings/quotas, we optimized the da
 | **Drawing Sync (`RealtimeSync`)** | 50ms Batching Window | Merges multiple rapid store changes into a single payload. |
 | | Smart Deduplication | Keeps only the final state if a shape is updated multiple times within 50ms. |
 | | Add-Then-Remove Cancellation | Produces zero network events if a drawing is deleted within the same batch. |
-| **Cursor Tracking (`LiveCursors`)** | Broadcast over Presence | Uses lightweight `channel.send()` broadcasts instead of heavy Presence database tracks. |
+| **Cursor Tracking (`LiveCursors`)** | Direct WebSocket relay | Cursor positions are only relayed within the board room, never written to the database. |
 | | 100ms Throttle + 2px Dead-zone | Ignores micro-movements, filtering cursor updates by **~40%**. |
 | | RAF-batched React Renders | Coalesces multiple peer updates into a single render frame using `requestAnimationFrame`. |
 
 ### 📦 Assets Self-Hosting
 
 *   **Solution:** All Tldraw static assets (fonts, icons, translations) are self-hosted in `public/tldraw-assets/` using the `@tldraw/assets` library helper.
-*   **Result:** Works **100% offline** and is **immune to CDN timeouts/blocks** (especially in Vietnam) or Content Security Policy (CSP) header conflicts on Vercel.
+*   **Result:** Works **100% offline** and is **immune to CDN timeouts/blocks** (especially in Vietnam).
 
 ---
 
@@ -69,11 +70,18 @@ sharenote/
 │   │   └── Board.jsx                # Main whiteboard canvas
 │   ├── App.jsx                      # Router + auth guard
 │   ├── main.jsx                     # App entry point
-│   ├── supabaseClient.js            # Supabase connection
+│   ├── api.js                       # REST client for the server
+│   ├── realtime.js                  # Shared WebSocket per board
 │   └── index.css                    # Design System + dark theme variables
 ├── public/
 │   └── tldraw-assets/               # Self-hosted fonts, icons, translations
-├── vercel.json                      # Vercel SPA routing
+├── server/
+│   ├── index.js                     # Server entry (API + WebSocket + serves dist/)
+│   ├── routes.js                    # REST API
+│   ├── realtime.js                  # WebSocket rooms per board
+│   ├── auth.js                      # Email/password auth, sessions
+│   ├── access.js                    # Board permissions
+│   └── db.js                        # SQLite (server/data/sharenote.db)
 └── package.json                     # Dependencies config
 ```
 
@@ -82,8 +90,7 @@ sharenote/
 ## 📦 Installation & Setup
 
 ### Prerequisites
-*   Node.js 18+
-*   Supabase Account
+*   Node.js 24+ (uses the built-in `node:sqlite` module, no separate database to install)
 
 ### 1. Clone & Install
 ```bash
@@ -92,35 +99,20 @@ cd sharenote
 npm install --legacy-peer-deps
 ```
 
-### 2. Configure Environment
-Create a `.env` file in the project root:
-```env
-VITE_SUPABASE_URL=https://your-project-url.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-
-### 3. Run Database Setup
-Execute the SQL files inside your Supabase SQL editor:
-1.  `docs/sql/complete_database_setup.sql` (Core tables)
-2.  `docs/sql/supabase_realtime_setup.sql` (Realtime publication)
-3.  `docs/sql/share_feature_setup.sql` (Sharing rules)
-
-### 4. Start Development
+### 2. Start Development
 ```bash
 npm run dev
 ```
+This runs Vite (port 5173) and the API server (port 3001) together. Open `http://localhost:5173` and click "Đăng ký" (Sign up) to create the first account. The SQLite database is created automatically at `server/data/sharenote.db`.
 
 ---
 
-## 🚀 Deployment
+## 🚀 Running for your LAN
 
-### Build for Production
 ```bash
-npm run build
+npm start
 ```
-
-### Deploy to Vercel
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/sharenote)
+This builds the frontend and runs a single server on port 3001. The server prints its LAN address (e.g. `http://192.168.1.10:3001`) so other machines on the same network can open it. Change the port with the `SHARENOTE_PORT` environment variable.
 
 ---
 

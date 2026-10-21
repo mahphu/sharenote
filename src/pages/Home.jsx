@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabaseClient'
+import { api } from '../api'
 
 export default function Home() {
   const [boards, setBoards] = useState([])
@@ -18,21 +18,18 @@ export default function Home() {
     fetchBoards()
   }, [])
 
-  // LẤY DANH SÁCH BẢNG VẼ TỪ SUPABASE
+  // LẤY DANH SÁCH BẢNG VẼ TỪ SERVER
   const fetchBoards = async () => {
-    const { data, error } = await supabase
-      .from('boards')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    try {
+      const { boards } = await api('/boards')
+      setBoards(boards)
+    } catch (error) {
       console.error('Lỗi lấy danh sách:', error)
     }
-    if (data) setBoards(data)
     setLoading(false)
   }
 
-  // TẠO BẢNG MỚI — Sinh slug 8 ký tự ngẫu nhiên, insert vào DB, rồi chuyển trang
+  // TẠO BẢNG MỚI — Server sinh slug ngẫu nhiên, rồi chuyển trang
   const createBoard = async () => {
     try {
       // Rate limiting: Max 1 board per 2 seconds
@@ -49,42 +46,13 @@ export default function Home() {
       setCreating(true)
       setLastCreateTime(now)
 
-      // Bước 1: Kiểm tra user hiện tại
-      const { data: { user }, error: authErr } = await supabase.auth.getUser()
-      if (authErr || !user) {
-        alert('🚨 Lỗi: Không nhận diện được người dùng. Hãy đăng nhập lại!')
-        return
-      }
-
-      // Bước 2: Tạo slug ngẫu nhiên 8 ký tự (cryptographically secure)
-      const randomSlug = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-        .map(b => b.toString(36))
-        .join('')
-        .substring(0, 10)
-
-      // Bước 3: Insert vào bảng boards
-      const { data, error } = await supabase
-        .from('boards')
-        .insert([{
-          owner_id: user.id,
-          unique_slug: randomSlug,
-          title: 'Ghi chú mới'
-        }])
-        .select()
-
-      // Bước 4: Kiểm tra lỗi Database
-      if (error) {
-        console.error('Lỗi chi tiết từ Database:', error)
-        alert('🚨 Lỗi Database: ' + error.message)
-        return
-      }
-
-      // Bước 5: Chuyển hướng sang phòng vẽ
-      if (data && data.length > 0) {
-        navigate(`/board/${data[0].unique_slug}`)
-      }
+      const { board } = await api('/boards', {
+        method: 'POST',
+        body: { title: 'Ghi chú mới' }
+      })
+      navigate(`/board/${board.unique_slug}`)
     } catch (err) {
-      alert('🚨 Lỗi hệ thống: ' + err.message)
+      alert('🚨 Lỗi: ' + err.message)
     } finally {
       setCreating(false)
     }
@@ -92,7 +60,7 @@ export default function Home() {
 
   // ĐĂNG XUẤT — Xóa session & reload trang
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await api('/auth/logout', { method: 'POST' }).catch(() => {})
     window.location.reload()
   }
 
