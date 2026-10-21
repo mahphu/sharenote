@@ -270,6 +270,11 @@ export default function Board() {
   )
 }
 
+// Must stay at module scope: a new object each render makes tldraw re-preload fonts and remount the editor
+const assetUrls = getAssetUrls({
+  baseUrl: '/tldraw-assets/'
+})
+
 function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
   const [initialSnapshot, setInitialSnapshot] = useState(undefined)
   const [isLoading, setIsLoading] = useState(true)
@@ -372,13 +377,9 @@ function TldrawCanvas({ boardId, userId, userEmail, isReadOnly }) {
     )
   }
 
-const assetUrls = getAssetUrls({
-  baseUrl: '/tldraw-assets/'
-})
-
   return (
     <div
-      style={{ flex: 1, width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
       onPointerDown={() => {
         if (editorRef.current) {
           editorRef.current.focus()
