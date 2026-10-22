@@ -55,8 +55,8 @@ export default function Board({ user }) {
   const navigate = useNavigate()
   const userId = user.id
   const [boardId, setBoardId] = useState(null)
-  const [ownerId, setOwnerId] = useState(null)
-  const [publicAccess, setPublicAccess] = useState('restricted')
+  // 'owner' | 'editor' | 'viewer', decided by the server
+  const [myRole, setMyRole] = useState(null)
   const [onlineUsers, setOnlineUsers] = useState(new Map())
   const [chatOpen, setChatOpen] = useState(true)
   const [usersOpen, setUsersOpen] = useState(true)
@@ -64,8 +64,8 @@ export default function Board({ user }) {
   const [deleting, setDeleting] = useState(false)
   const deletingRef = useRef(false)
 
-  const isOwner = userId && ownerId && userId === ownerId
-  const isReadOnly = !isOwner && publicAccess === 'viewer'
+  const isOwner = myRole === 'owner'
+  const isReadOnly = myRole === 'viewer'
 
   useEffect(() => {
     let cancelled = false
@@ -75,8 +75,7 @@ export default function Board({ user }) {
         const { board } = await api(`/boards/by-slug/${encodeURIComponent(slug)}`)
         if (cancelled) return
         setBoardId(board.id)
-        setOwnerId(board.owner_id)
-        setPublicAccess(board.public_access || 'restricted')
+        setMyRole(board.my_role)
       } catch (error) {
         if (cancelled) return
         if (error.status === 404) {
@@ -105,8 +104,8 @@ export default function Board({ user }) {
       socket.on('presence', ({ users }) => {
         setOnlineUsers(new Map(users.map(u => [u.id, u])))
       }),
-      socket.on('access', ({ public_access }) => {
-        setPublicAccess(public_access)
+      socket.on('access', ({ my_role }) => {
+        setMyRole(my_role)
       }),
       socket.on('forbidden', () => {
         alert('You no longer have access to this board.')
@@ -244,8 +243,7 @@ export default function Board({ user }) {
       {shareModalOpen && (
         <ShareModal
           boardId={boardId}
-          ownerId={ownerId}
-          currentUserId={userId}
+          isOwner={isOwner}
           slug={slug}
           onClose={() => setShareModalOpen(false)}
         />
@@ -281,6 +279,11 @@ function TldrawCanvas({ boardId, userId, isReadOnly }) {
 
     loadSavedState()
   }, [boardId])
+
+  // The owner can change someone's role while they are on the board
+  useEffect(() => {
+    editorRef.current?.updateInstanceState({ isReadonly: isReadOnly })
+  }, [isReadOnly])
 
   // Global keyboard shortcuts interceptor
   useEffect(() => {

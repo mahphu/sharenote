@@ -471,6 +471,18 @@ html, body {
   color: var(--text-muted);
 }
 
+.board-card-owner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.board-section + .board-section {
+  margin-top: 32px;
+}
+
 /* ---------- Board Room Page ---------- */
 .board-room {
   position: relative;
@@ -768,6 +780,12 @@ html, body {
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
+.board-badge--editor {
+  color: var(--accent-solid);
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
 .board-online-dot {
   width: 7px;
   height: 7px;
@@ -1034,6 +1052,107 @@ html, body {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+/* Members */
+.modal-invite-input {
+  font-family: var(--font);
+}
+
+.modal-role-select {
+  flex-shrink: 0;
+  padding: 0 8px;
+  height: 36px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.modal-role-select:focus {
+  border-color: var(--accent-solid);
+}
+
+.modal-role-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.modal-invite-btn {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 14px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.modal-invite-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.5;
+}
+
+.modal-member-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-member {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-member-email {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-member-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modal-member-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 /* ---------- Responsive ---------- */

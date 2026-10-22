@@ -51,7 +51,26 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  -- People the owner invited by email; their role applies whatever public_access is
+  CREATE TABLE IF NOT EXISTS board_members (
+    board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role     TEXT NOT NULL CHECK (role IN ('viewer', 'editor')),
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (board_id, user_id)
+  );
+
+  -- Boards a user has opened through a share link, so they show up on Home
+  CREATE TABLE IF NOT EXISTS board_visits (
+    board_id       TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_opened_at TEXT NOT NULL,
+    PRIMARY KEY (board_id, user_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_boards_owner ON boards(owner_id);
   CREATE INDEX IF NOT EXISTS idx_messages_board ON messages(board_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_board_members_user ON board_members(user_id);
+  CREATE INDEX IF NOT EXISTS idx_board_visits_user ON board_visits(user_id);
 `)

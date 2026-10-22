@@ -11,13 +11,13 @@
 //   { type: 'draw', senderId, added, updated, removed }
 //   { type: 'cursor', id, cx, cy }
 //   { type: 'chat', message }
-//   { type: 'access', public_access }
+//   { type: 'access', public_access, my_role }   (sent to each socket after access changes)
 //   { type: 'forbidden' } | { type: 'board-deleted' }
 // ============================================
 
 import { WebSocketServer, WebSocket } from 'ws'
 import { userFromCookieHeader } from './auth.js'
-import { getBoardById, canView, canEdit } from './access.js'
+import { getBoardById, roleFor, canView, canEdit } from './access.js'
 
 const MAX_PAYLOAD = 10 * 1024 * 1024
 const HEARTBEAT_MS = 30000
@@ -60,18 +60,21 @@ function leaveRoom(ws) {
   }
 }
 
-// Called after the owner changes public_access: drop sockets that lost access
+// Called after the owner changes public_access or members: drop sockets that lost access,
+// tell everyone else their (possibly new) role
 export function enforceBoardAccess(boardId) {
   const room = rooms.get(boardId)
   if (!room) return
   const board = getBoardById(boardId)
   for (const ws of [...room]) {
-    if (!board || !canView(ws.user, board)) {
+    const role = roleFor(ws.user, board)
+    if (!role) {
       send(ws, { type: 'forbidden' })
       leaveRoom(ws)
+    } else {
+      send(ws, { type: 'access', public_access: board.public_access, my_role: role })
     }
   }
-  if (board) broadcast(boardId, { type: 'access', public_access: board.public_access })
 }
 
 export function closeBoardRoom(boardId) {

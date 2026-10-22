@@ -2,27 +2,42 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 
 const ACCESS_OPTIONS = [
-  { value: 'restricted', label: 'Private', desc: 'Only you can access' },
-  { value: 'viewer', label: 'View only', desc: 'Anyone with link can view' },
-  { value: 'editor', label: 'Full access', desc: 'Anyone with link can edit' },
+  { value: 'restricted', label: 'Private', desc: 'Only you and invited members can access' },
+  { value: 'viewer', label: 'View only', desc: 'Anyone with the link can view; members keep their role' },
+  { value: 'editor', label: 'Full access', desc: 'Anyone with the link can edit' },
 ]
 
-export default function ShareModal({ boardId, ownerId, currentUserId, slug, onClose }) {
+const ROLE_OPTIONS = [
+  { value: 'editor', label: 'Can edit' },
+  { value: 'viewer', label: 'Can view' },
+]
+
+export default function ShareModal({ boardId, isOwner, slug, onClose }) {
   const [publicAccess, setPublicAccess] = useState('restricted')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [members, setMembers] = useState([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('editor')
+  const [memberBusy, setMemberBusy] = useState(false)
+  const [memberError, setMemberError] = useState('')
 
-  const isOwner = currentUserId === ownerId
   const shareUrl = `${window.location.origin}/board/${slug}`
   const activeOption = ACCESS_OPTIONS.find(o => o.value === publicAccess)
 
   useEffect(() => {
-    api(`/boards/by-slug/${encodeURIComponent(slug)}`)
-      .then(({ board }) => setPublicAccess(board.public_access || 'restricted'))
+    const requests = [
+      api(`/boards/by-slug/${encodeURIComponent(slug)}`)
+        .then(({ board }) => setPublicAccess(board.public_access || 'restricted'))
+    ]
+    if (isOwner) {
+      requests.push(api(`/boards/${boardId}/members`).then(({ members }) => setMembers(members)))
+    }
+    Promise.all(requests)
       .catch((error) => console.error('[Share] Load error:', error))
       .finally(() => setLoading(false))
-  }, [slug])
+  }, [slug, boardId, isOwner])
 
   const handleAccessChange = async (value) => {
     if (!isOwner || saving) return
@@ -36,6 +51,37 @@ export default function ShareModal({ boardId, ownerId, currentUserId, slug, onCl
     }
     setSaving(false)
   }
+
+  // Every members endpoint answers with the full, updated list
+  const updateMembers = async (path, options) => {
+    if (memberBusy) return false
+    setMemberBusy(true)
+    setMemberError('')
+    try {
+      const { members } = await api(`/boards/${boardId}/members${path}`, options)
+      setMembers(members)
+      return true
+    } catch (error) {
+      setMemberError(error.message)
+      return false
+    } finally {
+      setMemberBusy(false)
+    }
+  }
+
+  const handleInvite = async (e) => {
+    e.preventDefault()
+    const email = inviteEmail.trim()
+    if (!email) return
+    const ok = await updateMembers('', { method: 'POST', body: { email, role: inviteRole } })
+    if (ok) setInviteEmail('')
+  }
+
+  const handleRoleChange = (memberId, role) =>
+    updateMembers(`/${memberId}`, { method: 'PATCH', body: { role } })
+
+  const handleRemove = (memberId) =>
+    updateMembers(`/${memberId}`, { method: 'DELETE' })
 
   const handleCopy = async () => {
     try {
@@ -108,10 +154,76 @@ export default function ShareModal({ boardId, ownerId, currentUserId, slug, onCl
                 </div>
               </div>
 
+              {/* Members Section (owner only) */}
+              {isOwner && (
+                <div className="modal-section">
+                  <span className="modal-label">Members</span>
+                  <form className="modal-link-row" onSubmit={handleInvite}>
+                    <input
+                      className="modal-link-input modal-invite-input"
+                      type="email"
+                      placeholder="friend@email.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      aria-label="Email to invite"
+                      required
+                    />
+                    <select
+                      className="modal-role-select"
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value)}
+                      aria-label="Role for the invited person"
+                    >
+                      {ROLE_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <button className="modal-invite-btn" type="submit" disabled={memberBusy}>
+                      Invite
+                    </button>
+                  </form>
+                  {memberError && <p className="modal-error">{memberError}</p>}
+
+                  {members.length === 0 ? (
+                    <p className="modal-access-desc">No members yet. Invite people who already have an account.</p>
+                  ) : (
+                    <ul className="modal-member-list">
+                      {members.map(m => (
+                        <li key={m.id} className="modal-member">
+                          <span className="modal-member-email" title={m.email}>{m.email}</span>
+                          <select
+                            className="modal-role-select"
+                            value={m.role}
+                            onChange={e => handleRoleChange(m.id, e.target.value)}
+                            disabled={memberBusy}
+                            aria-label={`Role for ${m.email}`}
+                          >
+                            {ROLE_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="modal-member-remove"
+                            onClick={() => handleRemove(m.id)}
+                            disabled={memberBusy}
+                            aria-label={`Remove ${m.email}`}
+                            title="Remove"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <path d="M1 1l12 12M13 1L1 13" />
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               {/* Access Control Section */}
               <div className="modal-section">
                 <span className="modal-label">
-                  Access
+                  Link access
                   {!isOwner && <span className="modal-label-hint">Owner only</span>}
                 </span>
                 <div className="modal-access-options">

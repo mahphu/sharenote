@@ -11,7 +11,7 @@ import {
   isLoginBlocked, recordFailedLogin, clearFailedLogins
 } from './auth.js'
 import {
-  getBoardById, getBoardBySlug, listVisibleBoards, isOwner, canView, canEdit
+  getBoardById, getBoardBySlug, listVisibleBoards, listMembers, withRole, isOwner, canView, canEdit
 } from './access.js'
 import { broadcast, enforceBoardAccess, closeBoardRoom } from './realtime.js'
 
@@ -20,6 +20,7 @@ const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 200
 const MAX_MESSAGE_LENGTH = 5000
 const ACCESS_LEVELS = new Set(['restricted', 'viewer', 'editor'])
+const MEMBER_ROLES = new Set(['viewer', 'editor'])
 
 export const apiRouter = express.Router()
 
@@ -116,14 +117,21 @@ apiRouter.post('/boards', requireUser, (req, res) => {
     VALUES (?, ?, ?, ?, 'restricted', ?, ?)
   `).run(id, req.user.id, slug, title, now, now)
 
-  res.status(201).json({ board: getBoardById(id) })
+  res.status(201).json({ board: withRole(req.user, getBoardById(id)) })
 })
 
 apiRouter.get('/boards/by-slug/:slug', requireUser, (req, res) => {
   const board = getBoardBySlug(req.params.slug)
   if (!board) return res.status(404).json({ error: 'Board not found' })
   if (!canView(req.user, board)) return res.status(403).json({ error: 'You do not have access to this board' })
-  res.json({ board })
+
+  if (!isOwner(req.user, board)) {
+    db.prepare(`
+      INSERT INTO board_visits (board_id, user_id, last_opened_at) VALUES (?, ?, ?)
+      ON CONFLICT (board_id, user_id) DO UPDATE SET last_opened_at = excluded.last_opened_at
+    `).run(board.id, req.user.id, new Date().toISOString())
+  }
+  res.json({ board: withRole(req.user, board) })
 })
 
 apiRouter.patch('/boards/:id', requireUser, withBoard(isOwner), (req, res) => {
@@ -134,13 +142,54 @@ apiRouter.patch('/boards/:id', requireUser, withBoard(isOwner), (req, res) => {
   db.prepare('UPDATE boards SET public_access = ?, updated_at = ? WHERE id = ?')
     .run(access, new Date().toISOString(), req.board.id)
   enforceBoardAccess(req.board.id)
-  res.json({ board: getBoardById(req.board.id) })
+  res.json({ board: withRole(req.user, getBoardById(req.board.id)) })
 })
 
 apiRouter.delete('/boards/:id', requireUser, withBoard(isOwner), (req, res) => {
   db.prepare('DELETE FROM boards WHERE id = ?').run(req.board.id)
   closeBoardRoom(req.board.id)
   res.status(204).end()
+})
+
+// ---------- Members (owner only) ----------
+
+apiRouter.get('/boards/:id/members', requireUser, withBoard(isOwner), (req, res) => {
+  res.json({ members: listMembers(req.board.id) })
+})
+
+apiRouter.post('/boards/:id/members', requireUser, withBoard(isOwner), (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : ''
+  const role = req.body?.role
+  if (!MEMBER_ROLES.has(role)) return res.status(400).json({ error: 'Invalid role' })
+
+  const invitee = email && db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+  if (!invitee) return res.status(404).json({ error: 'No account uses this email yet. Ask them to sign up first.' })
+  if (invitee.id === req.user.id) return res.status(400).json({ error: 'You already own this board' })
+
+  db.prepare(`
+    INSERT INTO board_members (board_id, user_id, role, added_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT (board_id, user_id) DO UPDATE SET role = excluded.role
+  `).run(req.board.id, invitee.id, role, new Date().toISOString())
+  enforceBoardAccess(req.board.id)
+  res.status(201).json({ members: listMembers(req.board.id) })
+})
+
+apiRouter.patch('/boards/:id/members/:userId', requireUser, withBoard(isOwner), (req, res) => {
+  const role = req.body?.role
+  if (!MEMBER_ROLES.has(role)) return res.status(400).json({ error: 'Invalid role' })
+
+  const { changes } = db.prepare('UPDATE board_members SET role = ? WHERE board_id = ? AND user_id = ?')
+    .run(role, req.board.id, req.params.userId)
+  if (!changes) return res.status(404).json({ error: 'Member not found' })
+  enforceBoardAccess(req.board.id)
+  res.json({ members: listMembers(req.board.id) })
+})
+
+apiRouter.delete('/boards/:id/members/:userId', requireUser, withBoard(isOwner), (req, res) => {
+  db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
+    .run(req.board.id, req.params.userId)
+  enforceBoardAccess(req.board.id)
+  res.json({ members: listMembers(req.board.id) })
 })
 
 // ---------- Canvas ----------

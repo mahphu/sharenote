@@ -75,6 +75,42 @@ export default function Home() {
     })
   }
 
+  // Board của mình và board người khác chia sẻ (được mời hoặc đã mở qua link)
+  const myBoards = boards.filter(b => b.my_role === 'owner')
+  const sharedBoards = boards.filter(b => b.my_role !== 'owner')
+
+  const renderBoardCard = (b, index) => (
+    <div
+      className="board-card"
+      key={b.id}
+      style={{ animationDelay: `${0.3 + index * 0.05}s` }}
+    >
+      <div className="board-card-info">
+        <span className="board-card-title">{b.title}</span>
+        <span className="board-card-slug">/{b.unique_slug}</span>
+        {b.my_role !== 'owner' && (
+          <span className="board-card-owner">
+            Của {b.owner_email}
+            <span className={`board-badge ${b.my_role === 'editor' ? 'board-badge--editor' : 'board-badge--readonly'}`}>
+              {b.my_role === 'editor' ? 'Được sửa' : 'Chỉ xem'}
+            </span>
+          </span>
+        )}
+        {b.created_at && (
+          <span className="board-card-date">
+            Tạo lúc: {formatDate(b.created_at)}
+          </span>
+        )}
+      </div>
+      <button
+        className="btn btn-ghost"
+        onClick={() => navigate(`/board/${b.unique_slug}`)}
+      >
+        Vào phòng →
+      </button>
+    </div>
+  )
+
   // GIAO DIỆN — Căn giữa tuyệt đối bằng Flexbox, nền tối #1a1a1a, chữ trắng
   return (
     <>
@@ -115,8 +151,8 @@ export default function Home() {
         {/* Board list */}
         <div className="board-section">
           <div className="board-section-header">
-            <span className="board-section-title">Danh sách ghi chú</span>
-            {!loading && <span className="board-count">{boards.length}</span>}
+            <span className="board-section-title">Ghi chú của tôi</span>
+            {!loading && <span className="board-count">{myBoards.length}</span>}
           </div>
 
           {loading ? (
@@ -124,40 +160,27 @@ export default function Home() {
               <div className="spinner" />
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Đang tải dữ liệu...</span>
             </div>
-          ) : boards.length === 0 ? (
+          ) : myBoards.length === 0 ? (
             <div className="board-empty">
               <div className="board-empty-icon">📋</div>
               <p>Chưa có ghi chú nào.</p>
               <p style={{ marginTop: 4 }}>Nhấn "Tạo Ghi chú mới" để bắt đầu!</p>
             </div>
           ) : (
-            <div>
-              {boards.map((b, index) => (
-                <div
-                  className="board-card"
-                  key={b.id}
-                  style={{ animationDelay: `${0.3 + index * 0.05}s` }}
-                >
-                  <div className="board-card-info">
-                    <span className="board-card-title">{b.title}</span>
-                    <span className="board-card-slug">/{b.unique_slug}</span>
-                    {b.created_at && (
-                      <span className="board-card-date">
-                        Tạo lúc: {formatDate(b.created_at)}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => navigate(`/board/${b.unique_slug}`)}
-                  >
-                    Vào phòng →
-                  </button>
-                </div>
-              ))}
-            </div>
+            <div>{myBoards.map(renderBoardCard)}</div>
           )}
         </div>
+
+        {/* Shared with me */}
+        {!loading && sharedBoards.length > 0 && (
+          <div className="board-section">
+            <div className="board-section-header">
+              <span className="board-section-title">Được chia sẻ với tôi</span>
+              <span className="board-count">{sharedBoards.length}</span>
+            </div>
+            <div>{sharedBoards.map(renderBoardCard)}</div>
+          </div>
+        )}
       </div>
     </>
   )
