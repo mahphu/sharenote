@@ -24,9 +24,18 @@ if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next()
-    res.sendFile(join(DIST_DIR, 'index.html'))
+    // `root` keeps dotfile checks to the path below dist/, so a parent folder like .claude/ is fine
+    res.sendFile('index.html', { root: DIST_DIR })
   })
 }
+
+// Never send stack traces to the browser
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500
+  if (status >= 500) console.error('[server] Error:', err)
+  res.status(status).end()
+})
 
 const server = createServer(app)
 attachRealtime(server)
