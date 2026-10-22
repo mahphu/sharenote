@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { Tldraw, useEditor, track } from 'tldraw'
+import { Tldraw, useEditor, track, Box } from 'tldraw'
 import { getAssetUrls } from '@tldraw/assets/selfHosted'
 import { useEffect, useState, useRef } from 'react'
 import { api } from '../api'
@@ -374,6 +374,11 @@ function TldrawCanvas({ boardId, userId, isReadOnly }) {
               try {
                 editor.store.loadSnapshot(initialSnapshot)
                 loaded = true
+                // loadSnapshot recreates the instance record with default screen bounds
+                // (1080x720 at 0,0) and tldraw only re-measures on resize, which offsets
+                // every pointer event by the toolbar height until the window changes size
+                const rect = editor.getContainer().getBoundingClientRect()
+                editor.updateViewportScreenBounds(new Box(rect.left, rect.top, rect.width, rect.height))
               } catch (err) {
                 console.warn('[Canvas] loadSnapshot failed, falling back:', err)
               }
